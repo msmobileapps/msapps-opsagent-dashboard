@@ -1,6 +1,15 @@
 import React from 'react'
-import { LEADS, PIPELINE_STAGES, ACTIVITY } from '../data/mockLeads'
-import { Target, Users, TrendingUp, AlertTriangle, Clock, Zap, ArrowRight } from 'lucide-react'
+import { Target, Users, TrendingUp, AlertTriangle, Clock, Zap, ArrowRight, Plus, Inbox } from 'lucide-react'
+import { getPipelineStats, getLeadsByStage, getStaleLeads } from 'opsagent-core/state'
+
+const STAGE_CONFIG = [
+  { key: 'new', label: 'New', color: '#60a5fa' },
+  { key: 'contacted', label: 'Contacted', color: '#a78bfa' },
+  { key: 'discovery', label: 'Discovery', color: '#facc15' },
+  { key: 'proposal', label: 'Proposal', color: '#fb923c' },
+  { key: 'negotiation', label: 'Negotiation', color: '#f87171' },
+  { key: 'won', label: 'Won', color: '#4ade80' },
+]
 
 function StatCard({ label, value, sublabel, tone, icon: Icon }) {
   const tones = {
@@ -31,15 +40,18 @@ function StatCard({ label, value, sublabel, tone, icon: Icon }) {
   )
 }
 
-function PipelineBar() {
+function PipelineBar({ leads }) {
+  const byStage = getLeadsByStage(leads)
   return (
     <div className="flex gap-1">
-      {PIPELINE_STAGES.map(stage => (
+      {STAGE_CONFIG.map(stage => (
         <div
-          key={stage.label}
+          key={stage.key}
           className="flex-1 rounded-lg border border-[var(--surface-border)] bg-[var(--surface-raised)] p-3 text-center"
         >
-          <p className="text-xl font-extrabold" style={{ color: stage.color }}>{stage.count}</p>
+          <p className="text-xl font-extrabold" style={{ color: stage.color }}>
+            {(byStage[stage.key] || []).length}
+          </p>
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">{stage.label}</p>
         </div>
       ))}
@@ -47,12 +59,35 @@ function PipelineBar() {
   )
 }
 
-function LeadRow({ lead, onClick }) {
-  const heatColors = {
-    hot: 'bg-red-400',
-    warm: 'bg-amber-300',
-    cold: 'bg-slate-400',
+function heatFromLead(lead) {
+  // hot: proposal/negotiation stages, warm: contacted/discovery, cold: stale or new with no contact
+  if (lead.stage === 'proposal' || lead.stage === 'negotiation') return 'hot'
+  if (lead.stage === 'contacted' || lead.stage === 'discovery') return 'warm'
+  if (lead.lastContactAt) {
+    const days = (Date.now() - new Date(lead.lastContactAt).getTime()) / (24 * 3600 * 1000)
+    if (days > 7) return 'cold'
+    return 'warm'
   }
+  return 'cold'
+}
+
+function daysSinceContact(lead) {
+  if (!lead.lastContactAt) return 'No contact yet'
+  const days = Math.floor((Date.now() - new Date(lead.lastContactAt).getTime()) / (24 * 3600 * 1000))
+  if (days === 0) return 'Today'
+  if (days === 1) return '1 day ago'
+  return `${days} days ago`
+}
+
+function formatValue(v) {
+  if (!v) return '-'
+  if (v >= 1000) return `$${(v / 1000).toFixed(0)}k`
+  return `$${v}`
+}
+
+function LeadRow({ lead, onClick }) {
+  const heat = heatFromLead(lead)
+  const heatColors = { hot: 'bg-red-400', warm: 'bg-amber-300', cold: 'bg-slate-400' }
 
   return (
     <button
@@ -61,45 +96,46 @@ function LeadRow({ lead, onClick }) {
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className={`h-2 w-2 rounded-full ${heatColors[lead.heat]}`} />
-          <p className="truncate text-sm font-semibold text-white">{lead.name}</p>
+          <span className={`h-2 w-2 rounded-full ${heatColors[heat]}`} />
+          <p className="truncate text-sm font-semibold text-white">{lead.company || lead.name}</p>
           <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[10px] font-bold uppercase text-white/70">
-            {lead.heat}
+            {lead.stage}
           </span>
         </div>
-        <p className="mt-1 text-xs text-[var(--text-muted)]">{lead.contact} · {lead.industry}</p>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">{lead.name} · {lead.source}</p>
       </div>
       <div className="text-right shrink-0">
-        <p className="text-xs font-semibold text-[var(--accent-400)]">{lead.budget}</p>
-        <p className="text-[11px] text-[var(--text-muted)]">{lead.lastContact}</p>
+        <p className="text-xs font-semibold text-[var(--accent-400)]">{formatValue(lead.dealValue)}</p>
+        <p className="text-[11px] text-[var(--text-muted)]">{daysSinceContact(lead)}</p>
       </div>
       <ArrowRight className="h-4 w-4 text-[var(--text-muted)] shrink-0" />
     </button>
   )
 }
 
-function ActivityFeed() {
+function EmptyState({ onAddLead }) {
   return (
-    <div className="space-y-0">
-      {ACTIVITY.map((item, i) => (
-        <div key={i} className="flex gap-3 py-3 border-b border-[var(--surface-border)] last:border-b-0">
-          <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: item.color }} />
-          <div className="min-w-0">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.12em]" style={{ color: item.color }}>{item.agent}</p>
-            <p className="mt-0.5 text-sm leading-6 text-[var(--text-primary)]">{item.text}</p>
-            <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{item.time}</p>
-          </div>
-        </div>
-      ))}
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--surface-border)] bg-[var(--surface-raised)] p-12 text-center">
+      <Inbox className="h-12 w-12 text-[var(--text-muted)] opacity-40" />
+      <h3 className="mt-4 text-lg font-bold text-white">No leads yet</h3>
+      <p className="mt-2 max-w-sm text-sm text-[var(--text-secondary)]">
+        Your pipeline is empty. Add your first lead to start tracking, or run the Lead Pipeline agent to scan Google Calendar.
+      </p>
+      <button
+        onClick={onAddLead}
+        className="mt-5 flex items-center gap-2 rounded-xl bg-[var(--brand-500)] px-5 py-3 text-sm font-bold text-white transition hover:bg-[var(--brand-600)]"
+      >
+        <Plus className="h-4 w-4" /> Add first lead
+      </button>
     </div>
   )
 }
 
 export default function Dashboard({ store }) {
-  const { identity, openTask, tasks } = store
-  const hotLeads = LEADS.filter(l => l.heat === 'hot')
-  const warmLeads = LEADS.filter(l => l.heat === 'warm')
-  const staleLeads = LEADS.filter(l => l.heat === 'cold')
+  const { identity, openTask, tasks, leads } = store
+  const stats = getPipelineStats(leads)
+  const staleLeads = getStaleLeads(leads, 7)
+  const hotLeads = leads.filter(l => heatFromLead(l) === 'hot')
   const leadPipelineTask = tasks.find(t => t.taskId === 'lead-pipeline-daily')
 
   return (
@@ -121,134 +157,152 @@ export default function Dashboard({ store }) {
               <span className="live-dot" />
               <span>Lead pipeline active</span>
             </div>
-            <p className="text-sm text-[var(--text-muted)]">{identity.timezone} · {LEADS.length} leads tracked</p>
+            <p className="text-sm text-[var(--text-muted)]">{identity.timezone} · {leads.length} leads tracked</p>
           </div>
         </div>
       </section>
 
       {/* Stats */}
       <section className="mt-5 grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
-        <StatCard label="Active Leads" value={LEADS.length} sublabel={`${hotLeads.length} hot, ${warmLeads.length} warm`} tone="brand" icon={Target} />
-        <StatCard label="Hot Pipeline" value={hotLeads.length} sublabel="Needs immediate follow-up" tone="amber" icon={TrendingUp} />
+        <StatCard label="Active Leads" value={stats.total} sublabel={`${hotLeads.length} hot, ${stats.total - hotLeads.length - staleLeads.length} warm`} tone="brand" icon={Target} />
+        <StatCard label="Hot Pipeline" value={hotLeads.length} sublabel="Proposal or negotiation stage" tone="amber" icon={TrendingUp} />
         <StatCard label="At Risk" value={staleLeads.length} sublabel="No contact in 7+ days" tone="violet" icon={AlertTriangle} />
-        <StatCard label="Agents Running" value="1" sublabel="Lead Pipeline (daily, Sun-Thu)" tone="accent" icon={Zap} />
+        <StatCard label="Agents Running" value={tasks.filter(t => t.enabled).length || 0} sublabel="Lead Pipeline (daily, Sun-Thu)" tone="accent" icon={Zap} />
       </section>
 
-      {/* Pipeline Bar */}
-      <section className="mt-5">
-        <PipelineBar />
-      </section>
+      {leads.length === 0 ? (
+        <section className="mt-5">
+          <EmptyState onAddLead={() => leadPipelineTask && openTask(leadPipelineTask)} />
+        </section>
+      ) : (
+        <>
+          {/* Pipeline Bar */}
+          <section className="mt-5">
+            <PipelineBar leads={leads} />
+          </section>
 
-      {/* Main Grid */}
-      <section className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-        {/* Left Column */}
-        <div className="space-y-5">
-          {/* Hot Actions */}
-          <div className="surface-panel rounded-xl p-5 md:p-6">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <p className="section-kicker">Hot Actions Today</p>
-                <h3 className="mt-2 text-xl font-extrabold tracking-[-0.03em] text-white">Priority leads to act on now</h3>
-              </div>
-              <button
-                onClick={() => leadPipelineTask && openTask(leadPipelineTask)}
-                className="rounded-xl bg-[var(--brand-500)] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[var(--brand-600)]"
-              >
-                View full briefing
-              </button>
-            </div>
-            <div className="space-y-2">
-              {hotLeads.map(lead => (
-                <div key={lead.id} className="rounded-xl border border-red-500/20 bg-red-500/[0.06] p-4">
-                  <div className="flex items-start justify-between gap-4">
+          {/* Main Grid */}
+          <section className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+            {/* Left Column */}
+            <div className="space-y-5">
+              {/* Hot Actions */}
+              {hotLeads.length > 0 && (
+                <div className="surface-panel rounded-xl p-5 md:p-6">
+                  <div className="mb-5 flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-white">{lead.name}</p>
-                      <p className="mt-1 text-xs text-[var(--text-secondary)]">{lead.contact} · {lead.status}</p>
+                      <p className="section-kicker">Hot Actions Today</p>
+                      <h3 className="mt-2 text-xl font-extrabold tracking-[-0.03em] text-white">Priority leads to act on now</h3>
                     </div>
-                    <span className="text-xs font-bold text-[var(--accent-400)]">{lead.budget}</span>
+                    <button
+                      onClick={() => leadPipelineTask && openTask(leadPipelineTask)}
+                      className="rounded-xl bg-[var(--brand-500)] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[var(--brand-600)]"
+                    >
+                      View full briefing
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {hotLeads.map(lead => (
+                      <div key={lead.id} className="rounded-xl border border-red-500/20 bg-red-500/[0.06] p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-semibold text-white">{lead.company || lead.name}</p>
+                            <p className="mt-1 text-xs text-[var(--text-secondary)]">{lead.name} · {lead.stage} · {lead.nextAction || 'Follow up'}</p>
+                          </div>
+                          <span className="text-xs font-bold text-[var(--accent-400)]">{formatValue(lead.dealValue)}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              )}
 
-          {/* Full Pipeline */}
-          <div className="surface-panel rounded-xl p-5 md:p-6">
-            <div className="mb-5">
-              <p className="section-kicker">Full Pipeline</p>
-              <h3 className="mt-2 text-xl font-extrabold tracking-[-0.03em] text-white">All active leads</h3>
-            </div>
-            <div className="space-y-2">
-              {LEADS.map(lead => (
-                <LeadRow
-                  key={lead.id}
-                  lead={lead}
-                  onClick={() => leadPipelineTask && openTask(leadPipelineTask)}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column */}
-        <div className="space-y-5">
-          {/* Agent Activity */}
-          <div className="surface-panel rounded-xl p-5 md:p-6">
-            <div className="mb-5">
-              <p className="section-kicker">Agent Activity</p>
-              <h3 className="mt-2 text-xl font-extrabold tracking-[-0.03em] text-white">Latest from Lead Pipeline</h3>
-            </div>
-            <ActivityFeed />
-          </div>
-
-          {/* Pipeline Health */}
-          <div className="surface-panel rounded-xl p-5 md:p-6">
-            <div className="mb-5">
-              <p className="section-kicker">Pipeline Health</p>
-              <h3 className="mt-2 text-xl font-extrabold tracking-[-0.03em] text-white">Heat distribution</h3>
-            </div>
-            <div className="space-y-4">
-              {[
-                { label: 'Hot', leads: hotLeads, color: '#f87171', emoji: '' },
-                { label: 'Warm', leads: warmLeads, color: '#facc15', emoji: '' },
-                { label: 'Cold / Stale', leads: staleLeads, color: '#60a5fa', emoji: '' },
-              ].map(group => (
-                <div key={group.label}>
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-sm font-bold" style={{ color: group.color }}>{group.emoji} {group.label}</span>
-                    <span className="text-sm font-bold" style={{ color: group.color }}>{group.leads.length}</span>
-                  </div>
-                  {group.leads.map(l => (
-                    <p key={l.id} className="py-1 text-xs text-[var(--text-secondary)]">
-                      {l.name} — {l.budget}
-                    </p>
+              {/* Full Pipeline */}
+              <div className="surface-panel rounded-xl p-5 md:p-6">
+                <div className="mb-5">
+                  <p className="section-kicker">Full Pipeline</p>
+                  <h3 className="mt-2 text-xl font-extrabold tracking-[-0.03em] text-white">All active leads</h3>
+                </div>
+                <div className="space-y-2">
+                  {leads.filter(l => l.stage !== 'won' && l.stage !== 'lost').map(lead => (
+                    <LeadRow
+                      key={lead.id}
+                      lead={lead}
+                      onClick={() => leadPipelineTask && openTask(leadPipelineTask)}
+                    />
                   ))}
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Next Run */}
-          <div className="surface-panel rounded-xl p-5 md:p-6">
-            <div className="mb-3">
-              <p className="section-kicker">Schedule</p>
-              <h3 className="mt-2 text-xl font-extrabold tracking-[-0.03em] text-white">Lead Pipeline agent</h3>
-            </div>
-            <div className="flex items-center gap-3">
-              <Clock className="h-4 w-4 text-[var(--brand-400)]" />
-              <div>
-                <p className="text-sm font-semibold text-white">Sun-Thu at 8:00 AM</p>
-                <p className="text-xs text-[var(--text-muted)]">
-                  {leadPipelineTask?.lastRunAt
-                    ? `Last run: ${new Date(leadPipelineTask.lastRunAt).toLocaleString('en-IL', { timeZone: 'Asia/Jerusalem' })}`
-                    : 'Waiting for first run'
-                  }
-                </p>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
+
+            {/* Right Column */}
+            <div className="space-y-5">
+              {/* Pipeline Health */}
+              <div className="surface-panel rounded-xl p-5 md:p-6">
+                <div className="mb-5">
+                  <p className="section-kicker">Pipeline Health</p>
+                  <h3 className="mt-2 text-xl font-extrabold tracking-[-0.03em] text-white">Heat distribution</h3>
+                </div>
+                <div className="space-y-4">
+                  {[
+                    { label: 'Hot', filter: l => heatFromLead(l) === 'hot', color: '#f87171' },
+                    { label: 'Warm', filter: l => heatFromLead(l) === 'warm', color: '#facc15' },
+                    { label: 'Cold / Stale', filter: l => heatFromLead(l) === 'cold', color: '#60a5fa' },
+                  ].map(group => {
+                    const groupLeads = leads.filter(group.filter)
+                    return (
+                      <div key={group.label}>
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-sm font-bold" style={{ color: group.color }}>{group.label}</span>
+                          <span className="text-sm font-bold" style={{ color: group.color }}>{groupLeads.length}</span>
+                        </div>
+                        {groupLeads.map(l => (
+                          <p key={l.id} className="py-1 text-xs text-[var(--text-secondary)]">
+                            {l.company || l.name} — {formatValue(l.dealValue)}
+                          </p>
+                        ))}
+                        {groupLeads.length === 0 && (
+                          <p className="py-1 text-xs text-[var(--text-muted)]">No leads in this category</p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Total Pipeline Value */}
+              {stats.totalValue > 0 && (
+                <div className="surface-panel rounded-xl p-5 md:p-6">
+                  <p className="section-kicker">Pipeline Value</p>
+                  <p className="mt-2 text-3xl font-extrabold tracking-[-0.04em] text-[var(--accent-400)]">
+                    {formatValue(stats.totalValue)}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">Total estimated deal value across {stats.total} leads</p>
+                </div>
+              )}
+
+              {/* Next Run */}
+              <div className="surface-panel rounded-xl p-5 md:p-6">
+                <div className="mb-3">
+                  <p className="section-kicker">Schedule</p>
+                  <h3 className="mt-2 text-xl font-extrabold tracking-[-0.03em] text-white">Lead Pipeline agent</h3>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Clock className="h-4 w-4 text-[var(--brand-400)]" />
+                  <div>
+                    <p className="text-sm font-semibold text-white">Sun-Thu at 8:00 AM</p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {leadPipelineTask?.lastRunAt
+                        ? `Last run: ${new Date(leadPipelineTask.lastRunAt).toLocaleString('en-IL', { timeZone: 'Asia/Jerusalem' })}`
+                        : 'Waiting for first run'
+                      }
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
     </div>
   )
 }

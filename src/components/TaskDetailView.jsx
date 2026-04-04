@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { ArrowLeft, Play, Clock, CheckCircle, AlertTriangle, FileText, RefreshCw, Calendar, Mail, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Play, Clock, CheckCircle, AlertTriangle, FileText, RefreshCw, Calendar, Mail, Inbox } from 'lucide-react'
 import { triggerTask, fetchTaskOutput } from '../services/api'
-import { LEADS } from '../data/mockLeads'
+import { getPipelineStats, getStaleLeads } from 'opsagent-core/state'
 
 function StatusBadge({ enabled, lastRunAt }) {
   if (!lastRunAt) {
@@ -31,11 +31,39 @@ function OutputSection({ title, content }) {
   )
 }
 
+function daysSinceContact(lead) {
+  if (!lead.lastContactAt) return 'No contact'
+  const days = Math.floor((Date.now() - new Date(lead.lastContactAt).getTime()) / (24 * 3600 * 1000))
+  if (days === 0) return 'Today'
+  if (days === 1) return '1d ago'
+  return `${days}d ago`
+}
+
+function formatValue(v) {
+  if (!v) return '-'
+  if (v >= 1000) return `$${(v / 1000).toFixed(0)}k`
+  return `$${v}`
+}
+
 function LeadTable({ leads }) {
-  const heatBadge = {
-    hot: 'border-red-500/30 bg-red-500/15 text-red-300',
-    warm: 'border-amber-400/30 bg-amber-400/15 text-amber-200',
-    cold: 'border-slate-500/30 bg-slate-500/15 text-slate-300',
+  const stageBadge = {
+    new: 'border-sky-500/30 bg-sky-500/15 text-sky-300',
+    contacted: 'border-violet-400/30 bg-violet-400/15 text-violet-200',
+    discovery: 'border-amber-400/30 bg-amber-400/15 text-amber-200',
+    proposal: 'border-orange-400/30 bg-orange-400/15 text-orange-200',
+    negotiation: 'border-red-500/30 bg-red-500/15 text-red-300',
+    won: 'border-green-500/30 bg-green-500/15 text-green-300',
+    lost: 'border-slate-500/30 bg-slate-500/15 text-slate-400',
+  }
+
+  if (leads.length === 0) {
+    return (
+      <div className="flex flex-col items-center py-10 text-center">
+        <Inbox className="h-8 w-8 text-[var(--text-muted)] opacity-40" />
+        <p className="mt-3 text-sm text-[var(--text-secondary)]">No leads in pipeline yet</p>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">Run the agent or add leads manually to see them here</p>
+      </div>
+    )
   }
 
   return (
@@ -44,28 +72,28 @@ function LeadTable({ leads }) {
         <thead>
           <tr className="border-b border-[var(--surface-border)]">
             <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">Lead</th>
-            <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">Contact</th>
-            <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">Industry</th>
-            <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">Budget</th>
-            <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">Status</th>
-            <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">Heat</th>
+            <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">Company</th>
+            <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">Source</th>
+            <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">Value</th>
+            <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">Stage</th>
             <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">Last Contact</th>
+            <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">Next Action</th>
           </tr>
         </thead>
         <tbody>
           {leads.map(lead => (
             <tr key={lead.id} className="border-b border-[var(--surface-border)]/50 transition hover:bg-white/[0.02]">
               <td className="py-3 text-sm font-semibold text-white">{lead.name}</td>
-              <td className="py-3 text-sm text-[var(--text-secondary)]">{lead.contact}</td>
-              <td className="py-3 text-sm text-[var(--text-secondary)]">{lead.industry}</td>
-              <td className="py-3 text-sm font-semibold text-[var(--accent-400)]">{lead.budget}</td>
-              <td className="py-3 text-sm text-[var(--text-secondary)]">{lead.status}</td>
+              <td className="py-3 text-sm text-[var(--text-secondary)]">{lead.company || '-'}</td>
+              <td className="py-3 text-sm text-[var(--text-secondary)]">{lead.source || '-'}</td>
+              <td className="py-3 text-sm font-semibold text-[var(--accent-400)]">{formatValue(lead.dealValue)}</td>
               <td className="py-3">
-                <span className={`rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] ${heatBadge[lead.heat]}`}>
-                  {lead.heat}
+                <span className={`rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] ${stageBadge[lead.stage] || stageBadge.new}`}>
+                  {lead.stage}
                 </span>
               </td>
-              <td className="py-3 text-sm text-[var(--text-muted)]">{lead.lastContact}</td>
+              <td className="py-3 text-sm text-[var(--text-muted)]">{daysSinceContact(lead)}</td>
+              <td className="py-3 text-sm text-[var(--text-secondary)]">{lead.nextAction || '-'}</td>
             </tr>
           ))}
         </tbody>
@@ -75,7 +103,7 @@ function LeadTable({ leads }) {
 }
 
 export default function TaskDetailView({ store }) {
-  const { selectedTask, goBack, identity, taskOutputs, loadTaskOutput, addNotification } = store
+  const { selectedTask, goBack, identity, taskOutputs, loadTaskOutput, addNotification, leads } = store
   const [running, setRunning] = useState(false)
   const [output, setOutput] = useState(null)
 
@@ -94,7 +122,6 @@ export default function TaskDetailView({ store }) {
     const result = await triggerTask(taskId)
     if (result.success !== false) {
       addNotification('Task triggered! Output will appear shortly.', 'success')
-      // Poll for output after a delay
       setTimeout(() => loadTaskOutput(taskId), 5000)
     } else {
       addNotification(`Failed to trigger: ${result.error}`, 'error')
@@ -111,6 +138,9 @@ export default function TaskDetailView({ store }) {
   }
 
   const isLeadPipeline = taskId === 'lead-pipeline-daily'
+  const stats = getPipelineStats(leads)
+  const staleLeads = getStaleLeads(leads, 7)
+  const steps = task?.steps || []
 
   return (
     <div className="animate-fade-in pb-10">
@@ -174,9 +204,9 @@ export default function TaskDetailView({ store }) {
           <section className="mt-5 grid gap-4 md:grid-cols-4">
             {[
               { icon: Calendar, label: 'Next Run', value: task.nextRunAt ? new Date(task.nextRunAt).toLocaleString('en-IL', { timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit', weekday: 'short' }) : 'Pending', color: 'var(--brand-400)' },
-              { icon: FileText, label: 'Total Leads', value: LEADS.length, color: 'var(--text-primary)' },
-              { icon: AlertTriangle, label: 'Hot Leads', value: LEADS.filter(l => l.heat === 'hot').length, color: 'var(--danger)' },
-              { icon: Mail, label: 'Reports Sent', value: task.lastRunAt ? '1 today' : '0', color: 'var(--accent-400)' },
+              { icon: FileText, label: 'Total Leads', value: stats.total, color: 'var(--text-primary)' },
+              { icon: AlertTriangle, label: 'At Risk', value: staleLeads.length, color: 'var(--danger)' },
+              { icon: Mail, label: 'Pipeline Value', value: formatValue(stats.totalValue), color: 'var(--accent-400)' },
             ].map(stat => (
               <div key={stat.label} className="surface-panel rounded-xl p-4">
                 <div className="flex items-center gap-2">
@@ -189,25 +219,21 @@ export default function TaskDetailView({ store }) {
           </section>
 
           {/* Workflow Steps */}
-          <section className="mt-5 surface-panel rounded-xl p-5 md:p-6">
-            <p className="section-kicker">Execution Flow</p>
-            <h3 className="mt-2 mb-5 text-xl font-extrabold tracking-[-0.03em] text-white">What this agent does each run</h3>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              {[
-                { step: '01', title: 'Scan Calendar', body: 'Reads Google Calendar events for lead status, meetings, and follow-up dates.' },
-                { step: '02', title: 'Prioritize', body: 'Ranks leads by urgency, deal size, and days since last contact.' },
-                { step: '03', title: 'Flag Actions', body: 'Generates specific next steps for hot leads and stale opportunities.' },
-                { step: '04', title: 'Email Report', body: 'Sends morning briefing to michal@msapps.mobi via Zoho Mail.' },
-                { step: '05', title: 'WhatsApp Ping', body: 'Sends a quick summary reminder via WhatsApp.' },
-              ].map(item => (
-                <div key={item.step} className="rounded-xl border border-[var(--surface-border)] bg-[var(--surface-raised)] p-4">
-                  <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--brand-400)]">{item.step}</p>
-                  <h4 className="mt-2 text-base font-bold text-white">{item.title}</h4>
-                  <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">{item.body}</p>
-                </div>
-              ))}
-            </div>
-          </section>
+          {steps.length > 0 && (
+            <section className="mt-5 surface-panel rounded-xl p-5 md:p-6">
+              <p className="section-kicker">Execution Flow</p>
+              <h3 className="mt-2 mb-5 text-xl font-extrabold tracking-[-0.03em] text-white">What this agent does each run</h3>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                {steps.map(item => (
+                  <div key={item.step} className="rounded-xl border border-[var(--surface-border)] bg-[var(--surface-raised)] p-4">
+                    <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--brand-400)]">{item.step}</p>
+                    <h4 className="mt-2 text-base font-bold text-white">{item.title}</h4>
+                    <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">{item.body}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Lead Table */}
           <section className="mt-5 surface-panel rounded-xl p-5 md:p-6">
@@ -216,11 +242,13 @@ export default function TaskDetailView({ store }) {
                 <p className="section-kicker">Pipeline Data</p>
                 <h3 className="mt-2 text-xl font-extrabold tracking-[-0.03em] text-white">All tracked leads</h3>
               </div>
-              <span className="rounded-full border border-[var(--brand-500)]/20 bg-[var(--brand-500)]/10 px-3 py-1 text-xs font-extrabold uppercase tracking-[0.14em] text-[var(--brand-300)]">
-                {LEADS.length} leads
-              </span>
+              {leads.length > 0 && (
+                <span className="rounded-full border border-[var(--brand-500)]/20 bg-[var(--brand-500)]/10 px-3 py-1 text-xs font-extrabold uppercase tracking-[0.14em] text-[var(--brand-300)]">
+                  {leads.length} leads
+                </span>
+              )}
             </div>
-            <LeadTable leads={LEADS} />
+            <LeadTable leads={leads} />
           </section>
         </>
       )}

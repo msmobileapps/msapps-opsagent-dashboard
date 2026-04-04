@@ -1,6 +1,6 @@
 /**
- * API client — connects to the Express backend (same pattern as SocialJet).
- * All agent/task operations go through here.
+ * API client — connects to the Express/Netlify backend.
+ * All state and task operations go through here. No mock data.
  */
 const API_BASE = import.meta.env.VITE_API_BASE || ''
 
@@ -14,7 +14,77 @@ async function jsonFetch(path, options = {}) {
   return response.json()
 }
 
-// ── Task / Agent API ──────────────────────────────────────────
+// ── Ops State ────────────────────────────────────────────────
+
+export async function fetchOpsState() {
+  try {
+    return await jsonFetch('/api/ops-state')
+  } catch (err) {
+    console.warn('Ops state fetch failed:', err.message)
+    return { success: false, state: null, error: err.message }
+  }
+}
+
+export async function saveOpsState(state) {
+  try {
+    return await jsonFetch('/api/ops-state', {
+      method: 'POST',
+      body: JSON.stringify(state),
+    })
+  } catch (err) {
+    console.warn('Ops state save failed:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+// ── Leads ────────────────────────────────────────────────────
+
+export async function fetchLeads() {
+  try {
+    return await jsonFetch('/api/leads')
+  } catch (err) {
+    console.warn('Leads fetch failed:', err.message)
+    return { success: false, leads: [], error: err.message }
+  }
+}
+
+export async function createLead(lead) {
+  try {
+    return await jsonFetch('/api/leads', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'create', lead }),
+    })
+  } catch (err) {
+    console.warn('Lead create failed:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+export async function updateLeadStage(leadId, stage, notes = '') {
+  try {
+    return await jsonFetch('/api/leads', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'update-status', leadId, stage, notes }),
+    })
+  } catch (err) {
+    console.warn('Lead update failed:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+export async function deleteLead(leadId) {
+  try {
+    return await jsonFetch('/api/leads', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'delete', leadId }),
+    })
+  } catch (err) {
+    console.warn('Lead delete failed:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+// ── Tasks ────────────────────────────────────────────────────
 
 export async function fetchTasks() {
   try {
@@ -52,16 +122,7 @@ export async function fetchTaskOutput(taskId) {
   }
 }
 
-export async function fetchLeadPipelineData() {
-  try {
-    return await jsonFetch('/api/lead-pipeline')
-  } catch (err) {
-    console.warn('Lead pipeline fetch failed:', err.message)
-    return { success: false, leads: [], error: err.message }
-  }
-}
-
-// ── Health ──────────────────────────────────────────────────────
+// ── Health ────────────────────────────────────────────────────
 
 export async function healthCheck() {
   try {

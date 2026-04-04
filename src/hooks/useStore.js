@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect } from 'react'
 import { identity } from '../config/identity'
-import { fetchTasks, fetchTaskOutput, healthCheck } from '../services/api'
+import { fetchTasks, fetchTaskOutput, fetchLeads, healthCheck } from '../services/api'
 
 export function useStore() {
   const [view, setView] = useState('dashboard')
   const [selectedTask, setSelectedTask] = useState(null)
   const [tasks, setTasks] = useState([])
+  const [leads, setLeads] = useState([])
   const [taskOutputs, setTaskOutputs] = useState({})
   const [connected, setConnected] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -17,7 +18,7 @@ export function useStore() {
     setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000)
   }, [])
 
-  // Load tasks on mount
+  // Load real data on mount
   useEffect(() => {
     async function init() {
       setLoading(true)
@@ -25,12 +26,22 @@ export function useStore() {
       setConnected(health.connected)
 
       if (health.connected) {
-        const result = await fetchTasks()
-        if (result.tasks) setTasks(result.tasks)
+        const [taskResult, leadResult] = await Promise.all([
+          fetchTasks(),
+          fetchLeads(),
+        ])
+        if (taskResult.tasks) setTasks(taskResult.tasks)
+        if (leadResult.leads) setLeads(leadResult.leads)
       }
       setLoading(false)
     }
     init()
+  }, [])
+
+  const refreshLeads = useCallback(async () => {
+    const result = await fetchLeads()
+    if (result.leads) setLeads(result.leads)
+    return result
   }, [])
 
   const loadTaskOutput = useCallback(async (taskId) => {
@@ -62,6 +73,9 @@ export function useStore() {
     goBack,
     tasks,
     setTasks,
+    leads,
+    setLeads,
+    refreshLeads,
     taskOutputs,
     loadTaskOutput,
     connected,
