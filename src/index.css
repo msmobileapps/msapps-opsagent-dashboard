@@ -1,0 +1,94 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+/* OpsAgent Design System — shared with SocialJet */
+:root {
+  --bg-primary: #0a0a14;
+  --bg-secondary: #0f0f1a;
+  --bg-card: rgba(15, 15, 26, 0.88);
+  --bg-card-strong: rgba(10, 10, 20, 0.94);
+
+  --surface: #0f0f1a;
+  --surface-raised: #1a1a2e;
+  --surface-overlay: #252540;
+  --surface-border: #2d2d4a;
+
+  --brand-50: #f3f0ff;
+  --brand-100: #e9e3ff;
+  --brand-200: #d4c8ff;
+  --brand-300: #b49dff;
+  --brand-400: #9171f8;
+  --brand-500: #6C3AED;
+  --brand-600: #5b21d4;
+  --brand-700: #4c1db0;
+  --brand-800: #3e1a90;
+  --brand-900: #351876;
+  --brand-950: #0f0520;
+
+  --accent-50: #ecfdf5;
+  --accent-100: #d1fae5;
+  --accent-200: #a7f3d0;
+  --accent-300: #6ee7b7;
+  --accent-400: #34d399;
+  --accent-500: #10B981;
+  --accent-600: #059669;
+  --accent-700: #047857;
+
+  --border: rgba(45, 45, 74, 0.70);
+  --border-strong: rgba(45, 45, 74, 0.90);
+  --text-primary: #e2e2f0;
+  --text-secondary: #a0a0c0;
+  --text-muted: #6a6a8e;
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --success: #4ade80;
+}
+
+html, body, #root { min-height: 100%; }
+
+body {
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-overlay); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a5c; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.animate-fade-in { animation: fadeIn 0.2s ease-out; }
+
+@keyframes slideIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+.animate-slide-in { animation: slideIn 0.2s ease-out; }
+
+@keyframes pulseSlow { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+.pulse-slow { animation: pulseSlow 3s ease-in-out infinite; }
+
+.app-shell { min-height: 100vh; background: var(--bg-primary); }
+.app-sidebar { background: linear-gradient(180deg, var(--bg-primary) 0%, #0c0c1e 100%); border-right: 1px solid var(--surface-border); }
+.app-main { background: var(--bg-primary); }
+
+.surface-panel { background: var(--surface-raised); border: 1px solid var(--surface-border); box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2); }
+.surface-panel-strong { background: var(--surface); border: 1px solid var(--border-strong); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); }
+
+.grid-lines { position: relative; }
+.grid-lines::before { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(rgba(108, 58, 237, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(108, 58, 237, 0.03) 1px, transparent 1px); background-size: 34px 34px; mask-image: linear-gradient(180deg, rgba(0,0,0,0.4), transparent 90%); }
+
+.section-kicker { color: var(--brand-400); text-transform: uppercase; letter-spacing: 0.18em; font-size: 0.68rem; font-weight: 800; }
+
+.live-pill { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.8rem; border-radius: 9999px; border: 1px solid rgba(16, 185, 129, 0.20); background: rgba(16, 185, 129, 0.06); color: var(--text-secondary); font-size: 0.78rem; }
+.live-dot { width: 0.45rem; height: 0.45rem; border-radius: 9999px; background: var(--accent-500); box-shadow: 0 0 12px rgba(16, 185, 129, 0.6); }
+
+.sidebar-section-label { color: var(--text-muted); letter-spacing: 0.22em; text-transform: uppercase; font-size: 0.65rem; font-weight: 800; }
+
+.status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
+.status-hot { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+.status-warm { background: rgba(234, 179, 8, 0.15); color: #facc15; }
+.status-cold { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
+.status-new { background: rgba(108, 58, 237, 0.12); color: var(--brand-400); }
+.status-active { background: rgba(16, 185, 129, 0.12); color: var(--accent-400); }
+.status-stale { background: rgba(100, 116, 139, 0.12); color: #94a3b8; }

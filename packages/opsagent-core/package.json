@@ -1,0 +1,29 @@
+{
+  "name": "opsagent-core",
+  "version": "0.1.0",
+  "description": "Provider-agnostic workflow, matching, and AI task contracts for OpsAgent.",
+  "type": "module",
+  "private": false,
+  "main": "./src/index.js",
+  "license": "ISC",
+  "author": "MSApps <michal@msapps.mobi>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/msmobileapps/opsagent-core-js.git"
+  },
+  "keywords": ["opsagent", "workflow", "matching", "ai", "automation"],
+  "engines": { "node": ">=20" },
+  "files": ["src", "README.md"],
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json",
+    "./discovery": "./src/discovery.js",
+    "./matching": "./src/matching.js",
+    "./outreach": "./src/outreach.js",
+    "./state": "./src/state.js",
+    "./scheduling": "./src/scheduling.js",
+    "./ai/tasks": "./src/ai/tasks.js",
+    "./ai/runtime-client": "./src/ai/runtime-client.js"
+  }
+}
