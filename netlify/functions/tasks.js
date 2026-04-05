@@ -30,12 +30,15 @@ export default async (request) => {
 
   try {
     const url = new URL(request.url)
-    const taskId = url.pathname.replace('/api/tasks/', '').replace(/\/$/, '')
+    const path = url.pathname.replace(/\/$/, '')
 
     // GET /api/tasks — list all tasks
-    if (!taskId || taskId === 'tasks') {
+    if (path === '/api/tasks') {
       return jsonResponse({ success: true, tasks: TASKS })
     }
+
+    // GET /api/tasks/:taskId — single task detail
+    const taskId = path.replace('/api/tasks/', '')
 
     // GET /api/tasks/:taskId — single task detail
     const task = TASKS.find(t => t.taskId === taskId)
@@ -46,4 +49,4 @@ export default async (request) => {
   }
 }
 
-export const config = { path: '/api/tasks/*' }
+export const config = { path: ['/api/tasks', '/api/tasks/:taskId'] }

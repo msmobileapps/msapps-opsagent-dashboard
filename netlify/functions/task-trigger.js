@@ -38,4 +38,4 @@ export default async (request) => {
   }
 }
 
-export const config = { path: '/api/tasks/*/trigger' }
+export const config = { path: '/api/tasks/:taskId/trigger' }

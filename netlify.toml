@@ -6,12 +6,7 @@
 [build.environment]
   NODE_VERSION = "20"
 
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-
-# SPA fallback
+# SPA fallback — only for non-API routes (functions handle /api/* via config.path)
 [[redirects]]
   from = "/*"
   to = "/index.html"
