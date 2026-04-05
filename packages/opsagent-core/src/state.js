@@ -36,6 +36,7 @@ function normalizeLead(lead) {
     lastContactAt: lead.lastContactAt ?? null,
     nextActionDate: lead.nextActionDate ?? null,
     nextAction: lead.nextAction ?? '',
+    gcalEventUrl: lead.gcalEventUrl ?? '',
     history: Array.isArray(lead.history) ? lead.history : [],
   }
 }
@@ -85,6 +86,7 @@ export function createLeadRecord({
   phone = '',
   notes = '',
   dealValue = 0,
+  gcalEventUrl = '',
 }) {
   if (!PIPELINE_STAGES.includes(stage)) stage = 'new'
 
@@ -98,6 +100,7 @@ export function createLeadRecord({
     phone,
     notes,
     dealValue: Number(dealValue) || 0,
+    gcalEventUrl: gcalEventUrl || '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     lastContactAt: null,

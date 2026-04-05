@@ -1,5 +1,5 @@
 import React from 'react'
-import { Target, Users, TrendingUp, AlertTriangle, Clock, Zap, ArrowRight, Plus, Inbox } from 'lucide-react'
+import { Target, Users, TrendingUp, AlertTriangle, Clock, Zap, ArrowRight, Plus, Inbox, Calendar } from 'lucide-react'
 import { getPipelineStats, getLeadsByStage, getStaleLeads } from 'opsagent-core/state'
 
 const STAGE_CONFIG = [
@@ -104,6 +104,18 @@ function LeadRow({ lead, onClick }) {
         </div>
         <p className="mt-1 text-xs text-[var(--text-muted)]">{lead.name} · {lead.source}</p>
       </div>
+      {lead.gcalEventUrl && (
+        <a
+          href={lead.gcalEventUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          className="shrink-0 rounded-lg border border-sky-500/20 bg-sky-500/10 p-1.5 text-sky-300 transition hover:bg-sky-500/20"
+          title="Open in Google Calendar"
+        >
+          <Calendar className="h-3.5 w-3.5" />
+        </a>
+      )}
       <div className="text-right shrink-0">
         <p className="text-xs font-semibold text-[var(--accent-400)]">{formatValue(lead.dealValue)}</p>
         <p className="text-[11px] text-[var(--text-muted)]">{daysSinceContact(lead)}</p>

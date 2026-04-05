@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { ArrowLeft, Play, Clock, CheckCircle, AlertTriangle, FileText, RefreshCw, Calendar, Mail, Inbox } from 'lucide-react'
+import { ArrowLeft, Play, Clock, CheckCircle, AlertTriangle, FileText, RefreshCw, Calendar, Mail, Inbox, ExternalLink } from 'lucide-react'
 import { triggerTask, fetchTaskOutput } from '../services/api'
 import { getPipelineStats, getStaleLeads } from 'opsagent-core/state'
 
@@ -78,6 +78,7 @@ function LeadTable({ leads }) {
             <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">Stage</th>
             <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">Last Contact</th>
             <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">Next Action</th>
+            <th className="pb-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted)]">GCal</th>
           </tr>
         </thead>
         <tbody>
@@ -94,6 +95,22 @@ function LeadTable({ leads }) {
               </td>
               <td className="py-3 text-sm text-[var(--text-muted)]">{daysSinceContact(lead)}</td>
               <td className="py-3 text-sm text-[var(--text-secondary)]">{lead.nextAction || '-'}</td>
+              <td className="py-3">
+                {lead.gcalEventUrl ? (
+                  <a
+                    href={lead.gcalEventUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-lg border border-sky-500/20 bg-sky-500/10 px-2 py-1 text-[11px] font-bold text-sky-300 transition hover:bg-sky-500/20"
+                  >
+                    <Calendar className="h-3 w-3" />
+                    Event
+                    <ExternalLink className="h-2.5 w-2.5" />
+                  </a>
+                ) : (
+                  <span className="text-xs text-[var(--text-muted)]">-</span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

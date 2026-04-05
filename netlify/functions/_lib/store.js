@@ -17,7 +17,7 @@ function isNetlify() {
 export async function loadOpsState() {
   if (isNetlify()) {
     try {
-      const store = getStore(STORE_NAME)
+      const store = getStore({ name: STORE_NAME, consistency: 'strong' })
       const data = await store.get(STATE_KEY, { type: 'json' })
       return data || { version: 1, updatedAt: new Date().toISOString(), leads: [], clients: [] }
     } catch (err) {
@@ -40,7 +40,7 @@ export async function saveOpsState(state) {
 
   if (isNetlify()) {
     try {
-      const store = getStore(STORE_NAME)
+      const store = getStore({ name: STORE_NAME, consistency: 'strong' })
       await store.setJSON(STATE_KEY, payload)
       return payload
     } catch (err) {
