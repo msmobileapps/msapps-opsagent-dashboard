@@ -11,10 +11,17 @@
     "start": "node server/index.js",
     "test": "vitest run"
   },
-  "keywords": ["opsagent", "msapps", "dashboard", "ai", "lead-pipeline"],
+  "keywords": [
+    "opsagent",
+    "msapps",
+    "dashboard",
+    "ai",
+    "lead-pipeline"
+  ],
   "author": "MSApps <michal@msapps.mobi>",
   "license": "ISC",
   "dependencies": {
+    "@netlify/blobs": "^10.7.4",
     "express": "^5.2.1",
     "lucide-react": "^1.7.0",
     "opsagent-core": "file:packages/opsagent-core",
