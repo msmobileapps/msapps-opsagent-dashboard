@@ -49,3 +49,6 @@ export { buildTaskPrompt, parseTaskOutput } from './ai/tasks.js'
 
 // AI runtime
 export { RuntimeClient } from './ai/runtime-client.js'
+
+// Trainer engine
+export { createTrainerEngine } from './trainer/trainer-engine.js'

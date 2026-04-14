@@ -27,6 +27,13 @@
     "./ai/runtime-client": "./src/ai/runtime-client.js",
     "./api/ops-store": "./src/api/ops-store.js",
     "./api/cors": "./src/api/cors.js",
-    "./api/route-adapter": "./src/api/route-adapter.js"
+    "./api/route-adapter": "./src/api/route-adapter.js",
+    "./trainer": "./src/trainer/index.js",
+    "./trainer/streaming-client": "./src/trainer/streaming-client.js",
+    "./trainer/prompt-builder": "./src/trainer/prompt-builder.js",
+    "./trainer/response-parser": "./src/trainer/response-parser.js",
+    "./trainer/github-committer": "./src/trainer/github-committer.js",
+    "./trainer/engine": "./src/trainer/trainer-engine.js",
+    "./trainer/config-ilcf": "./src/trainer/trainer-config.ilcf.js"
   }
 }
