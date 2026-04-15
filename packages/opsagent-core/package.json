@@ -25,6 +25,7 @@
     "./outreach": "./src/outreach.js",
     "./ai/tasks": "./src/ai/tasks.js",
     "./ai/runtime-client": "./src/ai/runtime-client.js",
+    "./ai/providers": "./src/ai/providers.js",
     "./api/ops-store": "./src/api/ops-store.js",
     "./api/cors": "./src/api/cors.js",
     "./api/route-adapter": "./src/api/route-adapter.js",

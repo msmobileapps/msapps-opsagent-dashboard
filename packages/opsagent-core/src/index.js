@@ -50,5 +50,8 @@ export { buildTaskPrompt, parseTaskOutput } from './ai/tasks.js'
 // AI runtime
 export { RuntimeClient } from './ai/runtime-client.js'
 
+// AI providers (task-aware cascading)
+export { createCascadingProvider, TASK_TYPES } from './ai/providers.js'
+
 // Trainer engine
 export { createTrainerEngine } from './trainer/trainer-engine.js'
