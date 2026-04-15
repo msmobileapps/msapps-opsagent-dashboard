@@ -55,6 +55,42 @@
       background: rgba(118,66,154,0.04); border: 1px solid rgba(118,66,154,0.1); }
     .commit-card a { color: var(--accent); font-weight: 700; text-decoration: underline; }
     .commit-card .files { margin-top: 6px; font-size: 12px; color: var(--muted); }
+    /* Modification preview styles */
+    .mod-preview { margin-top: 12px; border: 1px solid var(--border); border-radius: var(--radius-md);
+      background: #fcfaf2; overflow: hidden; }
+    .mod-preview-header { padding: 10px 14px; background: rgba(118,66,154,0.06);
+      font-size: 12px; font-weight: 800; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center; }
+    .mod-item { padding: 10px 14px; border-bottom: 1px solid rgba(0,0,0,0.05); }
+    .mod-item:last-child { border-bottom: none; }
+    .mod-item.matched { background: rgba(76,175,80,0.04); }
+    .mod-item.failed { background: rgba(226,59,54,0.06); }
+    .mod-item .mod-file { font-size: 11px; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
+    .mod-item .mod-label { font-size: 10px; font-weight: 900; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--muted); margin-bottom: 2px; }
+    .mod-item .mod-search-display, .mod-item .mod-replace-display {
+      font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.5;
+      white-space: pre-wrap; word-break: break-all; padding: 6px 8px; border-radius: 4px;
+      max-height: 120px; overflow-y: auto; margin-bottom: 6px; }
+    .mod-item .mod-search-display { background: rgba(226,59,54,0.06); }
+    .mod-item .mod-replace-display { background: rgba(76,175,80,0.06); }
+    .mod-item textarea.mod-search-edit { width: 100%; min-height: 60px; font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px; line-height: 1.5; padding: 6px 8px; border: 1px solid rgba(118,66,154,0.2);
+      border-radius: 4px; background: #fff; resize: vertical; margin-bottom: 6px; }
+    .mod-item .mod-match-badge { display: inline-block; font-size: 10px; font-weight: 800;
+      padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
+    .mod-item .mod-match-badge.exact { background: rgba(76,175,80,0.15); color: #2e7d32; }
+    .mod-item .mod-match-badge.normalized, .mod-item .mod-match-badge.line-fuzzy {
+      background: rgba(255,152,0,0.15); color: #e65100; }
+    .mod-item .mod-match-badge.no-match { background: rgba(226,59,54,0.15); color: #c62828; }
+    .mod-item .mod-closest { font-size: 11px; color: #c62828; margin-top: 4px; font-style: italic; }
+    .mod-actions { padding: 10px 14px; display: flex; gap: 10px; justify-content: flex-end; }
+    .mod-actions .btn-confirm { background: var(--accent); color: #fff; border: none; padding: 8px 18px;
+      border-radius: var(--radius-md); font-weight: 800; font-size: 13px; cursor: pointer; }
+    .mod-actions .btn-confirm:hover { opacity: 0.9; }
+    .mod-actions .btn-cancel { background: none; border: 1px solid var(--border); padding: 8px 18px;
+      border-radius: var(--radius-md); font-weight: 700; font-size: 13px; cursor: pointer; color: var(--ink); }
+    .mod-actions .btn-cancel:hover { background: rgba(226,59,54,0.06); }
     .composer { display: grid; gap: 10px; }
     .composer textarea { width: 100%; min-height: 90px; border: 1px solid var(--border);
       border-radius: var(--radius-md); background: #fcfaf2; padding: 14px;
@@ -213,6 +249,18 @@
         noChanges: 'No changes needed.',
         warnings: 'Warnings:',
         errorPrefix: 'Error:',
+        reviewModifications: 'Review Modifications',
+        confirmCommit: 'Confirm & Save to GitHub',
+        cancelCommit: 'Cancel',
+        matchedExact: 'exact',
+        matchedNormalized: 'normalized',
+        matchedLineFuzzy: 'fuzzy',
+        noMatch: 'no match',
+        closestMatchAt: 'Closest match at line',
+        editSearch: 'Edit',
+        searchLabel: 'Search:',
+        replaceLabel: 'Replace:',
+        validating: 'Validating matches...',
         filesChanged: 'Files changed:',
         refreshButton: 'Refresh',
       },
@@ -440,10 +488,11 @@
           : '';
 
         const rulesText = [
-          '"search" must be EXACT substring from file (2-3 lines context for uniqueness).',
+          '"search" must be a CHARACTER-FOR-CHARACTER EXACT copy from the source file — copy-paste, do NOT retype or reformat. Include 2-3 lines of surrounding context so the match is unique.',
+          'Preserve ALL original whitespace, indentation (spaces vs tabs), quote style, and line breaks in the "search" field. Even one extra space will cause a match failure.',
           'Modify ONLY what instruction asks. Preserve code structure.',
           ...C.extraRules,
-          'Return ONLY JSON.',
+          'Return ONLY valid JSON — no explanation, no markdown outside the JSON.',
         ].map((r, i) => (i + 1) + '. ' + r).join('\n');
 
         const appContext = C.appDescription
@@ -494,6 +543,102 @@
         return '<div class="commit-card"><a href="' + url + '" target="_blank">Commit ' +
           c.sha.slice(0, 7) + '</a><div class="files">' + L.filesChanged + ' ' +
           c.files.join(', ') + '</div></div>';
+      }
+
+      // ── Modification preview with validation & edit ────────────────
+      function showModPreview(aiResult, dryRunData, tokenCount, totalTime, sectionCount) {
+        return new Promise((resolve) => {
+          const mods = aiResult.modifications.map((m, i) => ({
+            ...m,
+            index: i,
+            matchDetails: dryRunData?.matchDetails?.[i] || null,
+          }));
+
+          // Build match detail from dry-run data
+          const matchDetails = dryRunData?.matchDetails || [];
+          const totalMods = mods.length;
+          const matchedCount = matchDetails.filter(d => d?.matched).length;
+
+          let html = '<div class="mod-preview">';
+          html += '<div class="mod-preview-header"><span>' + L.reviewModifications +
+            ' (' + (dryRunData ? matchedCount + '/' + totalMods + ' matched' : totalMods + ' modifications') +
+            ')</span><span style="font-size:11px;color:var(--muted)">' +
+            tokenCount + ' tokens, ' + totalTime + 's</span></div>';
+
+          mods.forEach((mod, i) => {
+            const md = matchDetails[i];
+            const isMatched = md?.matched !== false;
+            const strategy = md?.strategy || null;
+            const cls = isMatched ? 'matched' : 'failed';
+
+            // Badge
+            let badge = '';
+            if (md) {
+              if (strategy === 'exact') badge = '<span class="mod-match-badge exact">' + L.matchedExact + '</span>';
+              else if (strategy === 'normalized') badge = '<span class="mod-match-badge normalized">' + L.matchedNormalized + '</span>';
+              else if (strategy === 'line-fuzzy') badge = '<span class="mod-match-badge line-fuzzy">' + L.matchedLineFuzzy + '</span>';
+              else if (!isMatched) badge = '<span class="mod-match-badge no-match">' + L.noMatch + '</span>';
+            }
+
+            html += '<div class="mod-item ' + cls + '" data-mod-idx="' + i + '">';
+            html += '<div class="mod-file">' + escHtml(mod.file) + badge + '</div>';
+            html += '<div class="mod-label">' + L.searchLabel + ' <button class="btn-ghost" style="font-size:10px;padding:1px 6px;cursor:pointer" data-edit-idx="' + i + '">' + L.editSearch + '</button></div>';
+            html += '<div class="mod-search-display" data-search-idx="' + i + '">' + escHtml(mod.search.slice(0, 300)) + (mod.search.length > 300 ? '...' : '') + '</div>';
+            html += '<textarea class="mod-search-edit" data-textarea-idx="' + i + '" style="display:none">' + escHtml(mod.search) + '</textarea>';
+
+            // Closest match hint for failed matches
+            if (!isMatched && md?.closestMatch) {
+              html += '<div class="mod-closest">' + L.closestMatchAt + ' ' + md.closestMatch.lineNumber +
+                ' (' + Math.round((md.closestMatch.score || 0) * 100) + '% similar)</div>';
+            }
+
+            html += '<div class="mod-label">' + L.replaceLabel + '</div>';
+            html += '<div class="mod-replace-display">' + escHtml(mod.replace.slice(0, 300)) + (mod.replace.length > 300 ? '...' : '') + '</div>';
+            html += '</div>';
+          });
+
+          html += '<div class="mod-actions">';
+          html += '<button class="btn-cancel" id="modCancel">' + L.cancelCommit + '</button>';
+          html += '<button class="btn-confirm" id="modConfirm">' + L.confirmCommit + '</button>';
+          html += '</div></div>';
+
+          // Summary message
+          const summaryText = aiResult.summary_he || aiResult.summary_en || '';
+          history.push({ role: 'assistant', html: summaryText + html });
+          render();
+
+          function escHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+          // Wire up edit buttons
+          document.querySelectorAll('[data-edit-idx]').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const idx = btn.dataset.editIdx;
+              const display = document.querySelector('[data-search-idx="' + idx + '"]');
+              const textarea = document.querySelector('[data-textarea-idx="' + idx + '"]');
+              if (display && textarea) {
+                display.style.display = display.style.display === 'none' ? '' : 'none';
+                textarea.style.display = textarea.style.display === 'none' ? '' : 'none';
+                if (textarea.style.display !== 'none') textarea.focus();
+              }
+            });
+          });
+
+          // Confirm button
+          document.getElementById('modConfirm')?.addEventListener('click', () => {
+            // Collect possibly-edited search strings
+            const editedMods = mods.map((mod, i) => {
+              const textarea = document.querySelector('[data-textarea-idx="' + i + '"]');
+              const editedSearch = textarea ? textarea.value : mod.search;
+              return { file: mod.file, search: editedSearch, replace: mod.replace };
+            });
+            resolve({ modifications: editedMods });
+          });
+
+          // Cancel button
+          document.getElementById('modCancel')?.addEventListener('click', () => {
+            resolve(null);
+          });
+        });
       }
 
       // ── Send instruction ───────────────────────────────────────────
@@ -590,13 +735,44 @@
             return;
           }
 
+          // ── Dry-run validation (POST with dryRun: true) ──
+          setStatus(L.validating || 'Validating matches...');
+          let dryRunData = null;
+          try {
+            const dryRunRes = await fetch(C.trainerApiUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                instruction: text,
+                modifications: aiResult.modifications,
+                summary_he: aiResult.summary_he,
+                summary_en: aiResult.summary_en,
+                dryRun: true,
+              }),
+            });
+            if (dryRunRes.ok) dryRunData = await dryRunRes.json();
+          } catch (e) { /* dry-run not supported — proceed without validation */ }
+
+          // ── Show modification preview + wait for user confirm ──
+          setStatus('');
+          typingEl.classList.remove('visible');
+
+          const previewConfirmed = await showModPreview(aiResult, dryRunData, tokenCount, totalTime, sectionCount);
+          if (!previewConfirmed) {
+            history.push({ role: 'assistant', html: '❌ Commit cancelled.', type: 'error' });
+            busy = false; sendBtn.disabled = false; inputEl.disabled = false; render();
+            return;
+          }
+
+          // ── Commit with possibly-edited modifications ──
+          typingEl.classList.add('visible');
           setStatus(L.savingChanges);
           const commitRes = await fetch(C.trainerApiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               instruction: text,
-              modifications: aiResult.modifications,
+              modifications: previewConfirmed.modifications,
               summary_he: aiResult.summary_he,
               summary_en: aiResult.summary_en,
             }),
