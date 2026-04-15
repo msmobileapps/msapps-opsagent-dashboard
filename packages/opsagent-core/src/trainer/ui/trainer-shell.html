@@ -1,0 +1,666 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpsAgent Trainer</title>
+  <style>
+    :root {
+      --bg: #f7f4e7; --surface: #ffffff; --ink: #111111; --muted: #59616b;
+      --border: rgba(17,17,17,0.08); --accent: #76429a; --accent-2: #1e73be;
+      --accent-3: #add037; --radius-xl: 28px; --radius-lg: 22px; --radius-md: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; }
+    body { font-family: system-ui, sans-serif; color: var(--ink);
+      background: radial-gradient(circle at top right, rgba(118,66,154,0.08), transparent 26%),
+        radial-gradient(circle at bottom left, rgba(30,115,190,0.06), transparent 22%),
+        linear-gradient(180deg, #fffef9 0%, var(--bg) 100%); min-height: 100vh;
+      display: flex; flex-direction: column; }
+    body.embed .topbar { display: none; }
+    body.embed { min-height: auto; }
+    .topbar { position: sticky; top: 0; z-index: 30; background: rgba(247,244,231,0.88);
+      backdrop-filter: blur(16px); border-bottom: 1px solid rgba(17,17,17,0.06);
+      padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand img { width: 60px; height: auto; }
+    .brand-text strong { font-size: 18px; display: block; line-height: 1.2; }
+    .brand-text span { font-size: 12px; color: var(--muted); }
+    .topbar-actions { display: flex; gap: 10px; align-items: center; }
+    .btn { border: 0; border-radius: 999px; padding: 10px 16px; font-weight: 700;
+      font-size: 13px; cursor: pointer; transition: transform 0.15s, filter 0.15s; text-decoration: none; }
+    .btn:hover { transform: translateY(-1px); filter: brightness(1.05); }
+    .btn-primary { color: #fff; background: linear-gradient(135deg, var(--accent), #9c67c6); }
+    .btn-ghost { background: #fff; border: 1px solid var(--border); color: var(--ink); }
+    .main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+      padding: 20px 24px; max-width: 1400px; margin: 0 auto; width: 100%; }
+    @media (max-width: 900px) { .main { grid-template-columns: 1fr; } }
+    .panel { background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-xl); display: flex; flex-direction: column;
+      overflow: hidden; box-shadow: 0 12px 40px rgba(17,17,17,0.06); }
+    .panel-header { padding: 16px 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; }
+    .panel-header h2 { font-size: 16px; font-weight: 800; }
+    .panel-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+    .panel-footer { padding: 14px 20px; border-top: 1px solid var(--border); }
+    .messages { display: flex; flex-direction: column; gap: 12px; }
+    .msg { border-radius: var(--radius-lg); padding: 14px 16px; line-height: 1.7;
+      font-size: 14px; max-width: 92%; border: 1px solid var(--border); }
+    .msg.user { background: rgba(118,66,154,0.06); align-self: flex-start; border-color: rgba(118,66,154,0.12); }
+    .msg.assistant { background: #fff; align-self: flex-end; }
+    .msg .role { display: block; font-size: 11px; font-weight: 900; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; }
+    .msg.commit { background: rgba(76,175,80,0.08); border-color: rgba(76,175,80,0.2); }
+    .msg.error { background: rgba(226,59,54,0.08); border-color: rgba(226,59,54,0.2); }
+    .commit-card { margin-top: 10px; padding: 12px; border-radius: var(--radius-md);
+      background: rgba(118,66,154,0.04); border: 1px solid rgba(118,66,154,0.1); }
+    .commit-card a { color: var(--accent); font-weight: 700; text-decoration: underline; }
+    .commit-card .files { margin-top: 6px; font-size: 12px; color: var(--muted); }
+    .composer { display: grid; gap: 10px; }
+    .composer textarea { width: 100%; min-height: 90px; border: 1px solid var(--border);
+      border-radius: var(--radius-md); background: #fcfaf2; padding: 14px;
+      resize: vertical; outline: none; font-size: 14px; line-height: 1.7; }
+    .composer textarea:focus { border-color: rgba(118,66,154,0.3); }
+    .composer-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .quick-prompts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .quick-btn { border: 1px solid var(--border); border-radius: 999px; padding: 8px 14px;
+      background: #fff; font-size: 12px; font-weight: 700; cursor: pointer; color: var(--ink);
+      transition: background 0.15s, border-color 0.15s; }
+    .quick-btn:hover { background: rgba(118,66,154,0.06); border-color: rgba(118,66,154,0.2); }
+    .preview-frame { width: 100%; height: 100%; border: 0; }
+    .typing { display: none; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; padding: 8px 0; }
+    .typing.visible { display: inline-flex; }
+    .typing .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+      animation: pulse 1.2s infinite ease-in-out; }
+    .typing .dot:nth-child(2) { animation-delay: 0.15s; }
+    .typing .dot:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes pulse { 0%,80%,100%{transform:scale(.35);opacity:.35}40%{transform:scale(1);opacity:1} }
+    .status-badge { display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 999px; font-size: 11px; font-weight: 800; }
+    .status-badge.online { background: rgba(173,208,55,0.14); color: #607500; }
+    .status-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-3); }
+    .token-info { font-size: 11px; color: var(--muted); padding: 4px 0; }
+    .no-preview .main { grid-template-columns: 1fr; max-width: 800px; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img id="brandLogo" src="" alt="" />
+      <div class="brand-text">
+        <strong id="brandTitle"></strong>
+        <span id="brandSubtitle"></span>
+      </div>
+    </div>
+    <div class="topbar-actions" id="topbarActions">
+      <span class="status-badge online"><span class="dot"></span> <span id="statusText"></span></span>
+    </div>
+  </header>
+  <div class="main">
+    <div class="panel">
+      <div class="panel-header">
+        <h2 id="instructionTitle"></h2>
+        <span style="font-size:12px;color:var(--muted)" id="instructionSubtitle"></span>
+      </div>
+      <div class="panel-body" id="chatBody">
+        <div class="messages" id="messages"></div>
+        <div class="typing" id="typing">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span id="typingText"></span>
+        </div>
+      </div>
+      <div class="panel-footer">
+        <div class="quick-prompts" id="quickPrompts"></div>
+        <div class="composer">
+          <textarea id="input" placeholder=""></textarea>
+          <div class="composer-actions">
+            <button class="btn btn-primary" id="sendBtn"></button>
+            <button class="btn btn-ghost" id="clearBtn"></button>
+          </div>
+          <div class="token-info" id="tokenInfo"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" id="previewPanel">
+      <div class="panel-header">
+        <h2 id="previewTitle"></h2>
+        <button class="btn btn-ghost" id="refreshPreview" style="font-size:12px" data-label-refresh></button>
+      </div>
+      <div class="panel-body" style="padding:0;overflow:hidden">
+        <iframe class="preview-frame" id="previewFrame" src="about:blank"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!--
+    ══════════════════════════════════════════════════════════════════
+    OpsAgent Generic Trainer Shell
+    ══════════════════════════════════════════════════════════════════
+
+    USAGE:
+    1. Include this HTML file
+    2. Before the closing </body>, add a <script> that sets window.TRAINER_CONFIG
+    3. Or load a separate config file: <script src="./my-trainer-config.js"></script>
+
+    The config object drives everything: branding, language, colors, AI endpoint,
+    section keywords, quick prompts, GitHub settings, and preview URL.
+
+    EMBED MODE:
+    Add ?embed=true to the URL to hide the topbar (for iframe embedding).
+
+    EXAMPLE CONFIG (minimal — ~30 lines):
+    window.TRAINER_CONFIG = {
+      appName: 'My App',
+      branding: { title: 'My Trainer', subtitle: 'Edit code with AI' },
+      ai: { endpoint: 'https://my-ollama.example.com', model: 'gemma3:4b' },
+      trainerApiUrl: '/api/trainer',
+      sectionKeywords: { main: ['keyword1', 'keyword2'] },
+    }
+  -->
+
+  <script>
+  /**
+   * OpsAgent Trainer Shell — Generic, config-driven trainer UI.
+   *
+   * Reads window.TRAINER_CONFIG to render branding, section keywords,
+   * quick prompts, and AI streaming. Works with any trainer backend
+   * that exposes GET /api/trainer (files) and POST /api/trainer (commit).
+   */
+  (function() {
+    'use strict';
+
+    // ── Wait for config ──────────────────────────────────────────────
+    function boot() {
+      const cfg = window.TRAINER_CONFIG;
+      if (!cfg) {
+        console.error('TRAINER_CONFIG not found. Set window.TRAINER_CONFIG before this script runs.');
+        return;
+      }
+      initShell(cfg);
+    }
+
+    // ── Default config (merged with user config) ─────────────────────
+    const DEFAULTS = {
+      appName: 'OpsAgent Trainer',
+      appDescription: '',
+
+      branding: {
+        title: 'Trainer',
+        subtitle: '',
+        logoUrl: '',
+        logoAlt: '',
+      },
+
+      // Language & direction
+      lang: 'en',
+      dir: 'ltr',
+
+      // UI labels (override for localization)
+      labels: {
+        instructionTitle: 'Instructions',
+        instructionSubtitle: 'Describe what to change',
+        previewTitle: 'Preview',
+        sendButton: 'Send',
+        clearButton: 'Clear',
+        statusOnline: 'Connected',
+        typingDefault: 'Processing...',
+        loadingFiles: 'Loading files...',
+        aiProcessing: 'AI is processing...',
+        savingChanges: 'Saving changes...',
+        userRole: 'You',
+        assistantRole: 'Trainer',
+        placeholder: 'Type an instruction...',
+        welcomeMessage: 'Hello! I\'m the Trainer. Tell me what to change and I\'ll update the code automatically.',
+        noChanges: 'No changes needed.',
+        warnings: 'Warnings:',
+        errorPrefix: 'Error:',
+        filesChanged: 'Files changed:',
+        refreshButton: 'Refresh',
+      },
+
+      // CSS custom properties (override theme)
+      theme: {},
+
+      // Topbar action links
+      topbarLinks: [],
+
+      // Quick prompt buttons: [{label, prompt}]
+      quickPrompts: [],
+
+      // AI configuration
+      ai: {
+        endpoint: '',
+        model: 'gemma3:4b',
+        temperature: 0.1,
+        systemMessage: 'You are a precise code modification assistant. Return only valid JSON. Every search string must be an exact match from the source file.',
+      },
+
+      // Trainer backend API URL (GET = fetch files, POST = commit)
+      trainerApiUrl: '/api/trainer',
+
+      // Section keywords for smart selection
+      sectionKeywords: {},
+      backendKeywords: [],
+      coupledSections: {},
+      conditionalIncludes: [],
+      extraRules: [],
+
+      // Files config (for prompt building)
+      mainFilePath: '',
+      backendFilePath: '',
+
+      // GitHub config (for commit card links)
+      github: { owner: '', repo: '', branch: '' },
+
+      // Preview
+      previewUrl: '/',
+      showPreview: true,
+      previewReloadDelay: 3000,
+
+      // Font
+      fontFamily: 'system-ui, sans-serif',
+      fontUrl: '',
+    };
+
+    // ── Deep merge ───────────────────────────────────────────────────
+    function merge(target, source) {
+      const out = { ...target };
+      for (const key of Object.keys(source)) {
+        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key]) && target[key]) {
+          out[key] = merge(target[key], source[key]);
+        } else if (source[key] !== undefined) {
+          out[key] = source[key];
+        }
+      }
+      return out;
+    }
+
+    // ── Initialize ───────────────────────────────────────────────────
+    function initShell(userConfig) {
+      const C = merge(DEFAULTS, userConfig);
+      const L = C.labels;
+
+      // Set HTML lang/dir
+      document.documentElement.lang = C.lang;
+      document.documentElement.dir = C.dir;
+      document.title = C.branding.title || C.appName;
+
+      // Load custom font
+      if (C.fontUrl) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = C.fontUrl;
+        document.head.appendChild(link);
+      }
+      document.body.style.fontFamily = C.fontFamily;
+
+      // Apply theme overrides
+      const root = document.documentElement;
+      for (const [prop, val] of Object.entries(C.theme)) {
+        root.style.setProperty('--' + prop, val);
+      }
+
+      // Embed mode
+      if (new URLSearchParams(location.search).get('embed') === 'true') {
+        document.body.classList.add('embed');
+      }
+
+      // Preview panel
+      if (!C.showPreview) {
+        document.getElementById('previewPanel').style.display = 'none';
+        document.body.classList.add('no-preview');
+      } else {
+        document.getElementById('previewFrame').src = C.previewUrl;
+        document.getElementById('previewTitle').textContent = L.previewTitle;
+        document.getElementById('refreshPreview').textContent = L.refreshButton;
+      }
+
+      // Branding
+      const logoEl = document.getElementById('brandLogo');
+      if (C.branding.logoUrl) {
+        logoEl.src = C.branding.logoUrl;
+        logoEl.alt = C.branding.logoAlt || C.appName;
+      } else {
+        logoEl.style.display = 'none';
+      }
+      document.getElementById('brandTitle').textContent = C.branding.title;
+      document.getElementById('brandSubtitle').textContent = C.branding.subtitle;
+      document.getElementById('statusText').textContent = L.statusOnline;
+
+      // Topbar links
+      const actionsEl = document.getElementById('topbarActions');
+      for (const link of C.topbarLinks) {
+        const a = document.createElement('a');
+        a.href = link.url;
+        a.className = 'btn btn-ghost';
+        a.target = '_blank';
+        a.textContent = link.label;
+        actionsEl.appendChild(a);
+      }
+
+      // Instruction panel
+      document.getElementById('instructionTitle').textContent = L.instructionTitle;
+      document.getElementById('instructionSubtitle').textContent = L.instructionSubtitle;
+      document.getElementById('typingText').textContent = L.typingDefault;
+
+      // Composer
+      document.getElementById('input').placeholder = L.placeholder;
+      document.getElementById('sendBtn').textContent = L.sendButton;
+      document.getElementById('clearBtn').textContent = L.clearButton;
+
+      // Quick prompts
+      const qpContainer = document.getElementById('quickPrompts');
+      for (const qp of C.quickPrompts) {
+        const btn = document.createElement('button');
+        btn.className = 'quick-btn';
+        btn.textContent = qp.label;
+        btn.dataset.prompt = qp.prompt;
+        qpContainer.appendChild(btn);
+      }
+
+      // ── State ──────────────────────────────────────────────────────
+      const messagesEl = document.getElementById('messages');
+      const typingEl = document.getElementById('typing');
+      const inputEl = document.getElementById('input');
+      const sendBtn = document.getElementById('sendBtn');
+      const clearBtn = document.getElementById('clearBtn');
+      const previewFrame = document.getElementById('previewFrame');
+      const tokenInfoEl = document.getElementById('tokenInfo');
+      let busy = false;
+      const history = [];
+
+      // Welcome message
+      history.push({ role: 'assistant', html: L.welcomeMessage });
+      render();
+
+      // ── Section selection (config-driven) ──────────────────────────
+      function selectRelevantSections(instruction, allSections, backendCode) {
+        const lower = instruction.toLowerCase();
+        const selected = {};
+        let anyMatch = false;
+
+        for (const [section, keywords] of Object.entries(C.sectionKeywords)) {
+          if (allSections[section] && keywords.some(kw => lower.includes(kw))) {
+            selected[section] = allSections[section];
+            anyMatch = true;
+          }
+        }
+
+        // Coupled sections
+        for (const [trigger, deps] of Object.entries(C.coupledSections)) {
+          if (selected[trigger]) {
+            for (const dep of deps) {
+              if (allSections[dep]) selected[dep] = allSections[dep];
+            }
+          }
+        }
+
+        // Conditional includes
+        for (const ci of C.conditionalIncludes) {
+          if (selected[ci.trigger] && allSections[ci.include]) {
+            if (ci.keywords.some(kw => lower.includes(kw))) {
+              selected[ci.include] = allSections[ci.include];
+            }
+          }
+        }
+
+        // Fallback: no keyword match → include all
+        if (!anyMatch) {
+          return { sections: allSections, includeBackend: true };
+        }
+
+        const includeBackend = C.backendKeywords.some(kw => lower.includes(kw));
+        return { sections: selected, includeBackend };
+      }
+
+      // ── Token estimation ───────────────────────────────────────────
+      function estimateTokens(text) {
+        return Math.ceil(text.length / 3.5);
+      }
+
+      function chooseNumCtx(promptText) {
+        const tokens = estimateTokens(promptText);
+        if (tokens < 2800) return { num_ctx: 4096, estimatedTokens: tokens };
+        if (tokens < 6500) return { num_ctx: 8192, estimatedTokens: tokens };
+        return { num_ctx: 8192, estimatedTokens: tokens };
+      }
+
+      // ── Prompt builder (config-driven) ─────────────────────────────
+      function buildAiPrompt(instruction, allSections, backendCode) {
+        const { sections, includeBackend } = selectRelevantSections(instruction, allSections, backendCode);
+        const sectionNames = Object.keys(sections);
+        const mainFile = C.mainFilePath || 'index.html';
+        const backendFile = C.backendFilePath || '';
+
+        const sectionTexts = Object.entries(sections)
+          .map(([name, text]) => '<section name="' + name + '">\n' + text + '\n</section>')
+          .join('\n\n');
+
+        const backendPart = (includeBackend && backendCode && backendFile)
+          ? '\n\n<file path="' + backendFile + '">\n' + backendCode + '\n</file>'
+          : '';
+
+        const rulesText = [
+          '"search" must be EXACT substring from file (2-3 lines context for uniqueness).',
+          'Modify ONLY what instruction asks. Preserve code structure.',
+          ...C.extraRules,
+          'Return ONLY JSON.',
+        ].map((r, i) => (i + 1) + '. ' + r).join('\n');
+
+        const appContext = C.appDescription
+          ? 'You are modifying ' + C.appName + ' (' + C.appDescription + ').'
+          : 'You are modifying ' + C.appName + '.';
+
+        const prompt = appContext + '\n\n<instruction>\n' + instruction +
+          '\n</instruction>\n\nModifiable sections (showing only relevant ones: ' +
+          sectionNames.join(', ') + '):\n\n<file path="' + mainFile + '">\n' +
+          sectionTexts + '\n</file>' + backendPart +
+          '\n\nReturn a JSON object:\n{\n  "summary_he": "Hebrew summary",\n  "summary_en": "English summary",\n  "modifications": [{"file": "' + mainFile + '", "search": "EXACT substring", "replace": "replacement"}]\n}\n\nRULES:\n' + rulesText;
+
+        return { prompt, sectionCount: sectionNames.length, includeBackend };
+      }
+
+      // ── JSON extraction ────────────────────────────────────────────
+      function extractJson(text) {
+        const fenced = text.match(/```json\s*([\s\S]*?)```/i);
+        if (fenced) return fenced[1].trim();
+        const fenced2 = text.match(/```\s*([\s\S]*?)```/);
+        if (fenced2) return fenced2[1].trim();
+        const first = text.indexOf('{');
+        const last = text.lastIndexOf('}');
+        if (first !== -1 && last > first) return text.slice(first, last + 1);
+        return text;
+      }
+
+      // ── UI helpers ─────────────────────────────────────────────────
+      function setStatus(msg) {
+        typingEl.querySelector('span:last-child').textContent = msg;
+      }
+
+      function render() {
+        messagesEl.innerHTML = history.map(m => {
+          const cls = m.role + (m.type ? ' ' + m.type : '');
+          const role = m.role === 'user' ? L.userRole : L.assistantRole;
+          return '<div class="msg ' + cls + '"><span class="role">' + role +
+            '</span><div>' + m.html + '</div>' +
+            (m.commit ? renderCommit(m.commit) : '') + '</div>';
+        }).join('');
+        document.getElementById('chatBody').scrollTop = document.getElementById('chatBody').scrollHeight;
+      }
+
+      function renderCommit(c) {
+        const url = c.url || (C.github.owner
+          ? 'https://github.com/' + C.github.owner + '/' + C.github.repo + '/commit/' + c.sha
+          : '#');
+        return '<div class="commit-card"><a href="' + url + '" target="_blank">Commit ' +
+          c.sha.slice(0, 7) + '</a><div class="files">' + L.filesChanged + ' ' +
+          c.files.join(', ') + '</div></div>';
+      }
+
+      // ── Send instruction ───────────────────────────────────────────
+      async function send(text) {
+        if (!text.trim() || busy) return;
+        busy = true;
+        inputEl.value = '';
+        sendBtn.disabled = true;
+        inputEl.disabled = true;
+        history.push({ role: 'user', html: text.replace(/</g, '&lt;').replace(/\n/g, '<br>') });
+        render();
+        typingEl.classList.add('visible');
+
+        try {
+          setStatus(L.loadingFiles);
+          const configRes = await fetch(C.trainerApiUrl);
+          if (!configRes.ok) {
+            const d = await configRes.json().catch(() => ({}));
+            throw new Error(d.error || 'Failed to fetch files');
+          }
+          const serverConfig = await configRes.json();
+          const aiEndpoint = C.ai.endpoint || serverConfig.aiEndpoint;
+          if (!aiEndpoint) throw new Error('AI endpoint not configured');
+
+          setStatus(L.aiProcessing);
+
+          const { prompt, sectionCount, includeBackend } = buildAiPrompt(
+            text, serverConfig.sections, serverConfig.chatJs
+          );
+
+          const systemMsg = C.ai.systemMessage;
+          const fullPromptText = systemMsg + '\n' + prompt;
+          const { num_ctx, estimatedTokens } = chooseNumCtx(fullPromptText);
+
+          tokenInfoEl.textContent = sectionCount + ' sections | ~' + estimatedTokens +
+            ' tokens | ctx: ' + num_ctx + (includeBackend ? ' +backend' : '');
+
+          const aiRes = await fetch(aiEndpoint.replace(/\/+$/, '') + '/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: C.ai.model,
+              stream: true,
+              options: { num_ctx, temperature: C.ai.temperature },
+              messages: [
+                { role: 'system', content: systemMsg },
+                { role: 'user', content: prompt },
+              ],
+            }),
+          });
+          if (!aiRes.ok) throw new Error('AI error: HTTP ' + aiRes.status);
+
+          // Stream response
+          const reader = aiRes.body.getReader();
+          const decoder = new TextDecoder();
+          let rawText = '';
+          let tokenCount = 0;
+          const startTime = Date.now();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            for (const line of chunk.split('\n')) {
+              if (!line.trim()) continue;
+              try {
+                const j = JSON.parse(line);
+                if (j.message?.content) {
+                  rawText += j.message.content;
+                  tokenCount++;
+                  if (tokenCount % 20 === 0) {
+                    const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+                    setStatus('AI ' + tokenCount + ' tokens (' + elapsed + 's)...');
+                  }
+                }
+              } catch (e) { /* partial line */ }
+            }
+          }
+          const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+          if (!rawText) throw new Error('AI returned empty response');
+
+          const aiResult = JSON.parse(extractJson(rawText));
+          if (!aiResult.modifications || aiResult.modifications.length === 0) {
+            history.push({
+              role: 'assistant',
+              html: (aiResult.summary_he || aiResult.summary_en || L.noChanges) +
+                '<br><span style="font-size:11px;color:var(--muted)">' +
+                tokenCount + ' tokens in ' + totalTime + 's</span>',
+            });
+            typingEl.classList.remove('visible');
+            busy = false;
+            sendBtn.disabled = false;
+            inputEl.disabled = false;
+            render();
+            return;
+          }
+
+          setStatus(L.savingChanges);
+          const commitRes = await fetch(C.trainerApiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              instruction: text,
+              modifications: aiResult.modifications,
+              summary_he: aiResult.summary_he,
+              summary_en: aiResult.summary_en,
+            }),
+          });
+          const commitData = await commitRes.json();
+          if (!commitRes.ok) throw new Error(commitData.error || 'Commit failed');
+
+          history.push({
+            role: 'assistant',
+            type: 'commit',
+            html: (commitData.summary_he || commitData.summary_en || 'Code updated!') +
+              '<br><span style="font-size:11px;color:var(--muted)">' +
+              sectionCount + ' sections, ' + tokenCount + ' tokens, ' + totalTime + 's</span>',
+            commit: commitData.commit ? {
+              sha: commitData.commit.sha,
+              url: commitData.commit.html_url,
+              files: commitData.changed_files || [],
+            } : null,
+          });
+          if (commitData.errors?.length) {
+            history.push({
+              role: 'assistant',
+              type: 'error',
+              html: L.warnings + ' ' + commitData.errors.join('<br>'),
+            });
+          }
+          if (C.showPreview && C.previewReloadDelay > 0) {
+            setTimeout(() => { previewFrame.src = previewFrame.src; }, C.previewReloadDelay);
+          }
+        } catch (err) {
+          history.push({ role: 'assistant', type: 'error', html: L.errorPrefix + ' ' + err.message });
+        }
+        typingEl.classList.remove('visible');
+        busy = false;
+        sendBtn.disabled = false;
+        inputEl.disabled = false;
+        render();
+      }
+
+      // ── Event listeners ────────────────────────────────────────────
+      sendBtn.addEventListener('click', () => send(inputEl.value));
+      inputEl.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(inputEl.value); }
+      });
+      clearBtn.addEventListener('click', () => { history.length = 1; render(); });
+      qpContainer.addEventListener('click', e => {
+        const btn = e.target.closest('[data-prompt]');
+        if (btn) send(btn.dataset.prompt);
+      });
+      if (C.showPreview) {
+        document.getElementById('refreshPreview').addEventListener('click', () => {
+          previewFrame.src = previewFrame.src;
+        });
+      }
+    }
+
+    // Boot when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', boot);
+    } else {
+      // If config script hasn't loaded yet, wait a tick
+      setTimeout(boot, 0);
+    }
+  })();
+  </script>
+</body>
+</html>
