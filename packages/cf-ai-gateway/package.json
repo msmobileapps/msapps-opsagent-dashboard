@@ -1,0 +1,16 @@
+{
+  "name": "cf-ai-gateway",
+  "version": "0.1.0",
+  "description": "Cloudflare Worker AI gateway — CORS, task-aware routing, streaming",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "tail": "wrangler tail"
+  },
+  "dependencies": {
+    "hono": "^4.7.0"
+  }
+}
