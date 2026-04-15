@@ -1,13 +1,16 @@
 /**
- * Task-aware cascading AI provider — CF Workers AI + Groq + Cloud Run Ollama.
+ * Task-aware cascading AI provider — CF Workers AI + Cloud Run Ollama.
+ *
+ * ZERO token cost. No paid/metered providers (Groq, Gemini, OpenAI, Anthropic).
  *
  * Routes AI requests based on task type to the best provider cascade:
- *   code-generation → Groq (llama-3.3-70b) → Cloud Run Ollama
- *   classification  → CF Workers AI (llama-3.1-8b) → Groq
- *   extraction      → CF Workers AI → Groq
- *   embedding       → CF Workers AI only
- *   chat            → Groq → CF Workers AI → Cloud Run Ollama
- *   default         → Groq → CF Workers AI → Cloud Run Ollama
+ *   code-generation → Workers AI → Ollama
+ *   classification  → Workers AI
+ *   extraction      → Workers AI
+ *   embedding       → Workers AI only
+ *   chat            → Workers AI → Ollama
+ *   trainer         → Workers AI → Ollama
+ *   default         → Workers AI → Ollama
  *
  * Zero dependencies. Works in browser AND Node.js.
  * CF Workers AI uses the AI binding inside Workers, or HTTP API externally.
@@ -125,53 +128,6 @@ export const WorkersAIProvider = {
   },
 }
 
-// ── Groq Provider ───────────────────────────────────────────────────────────
-
-export const GroqProvider = {
-  name: 'groq',
-  models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
-  supportedTasks: ['code-generation', 'classification', 'extraction', 'chat', 'trainer'],
-
-  isAvailable(config = {}) {
-    return Boolean(config.groqApiKey)
-  },
-
-  async chat(messages, opts = {}, config = {}) {
-    const model = opts.model || 'llama-3.3-70b-versatile'
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.groqApiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: opts.temperature ?? 0.2,
-        max_tokens: opts.maxTokens || 2048,
-        stream: Boolean(opts.stream),
-      }),
-    })
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => '')
-      throw new Error(`Groq HTTP ${response.status}: ${body.slice(0, 200)}`)
-    }
-
-    if (opts.stream) {
-      return { stream: response.body, provider: 'groq', model }
-    }
-
-    const data = await response.json()
-    return {
-      content: data.choices?.[0]?.message?.content || '',
-      provider: 'groq',
-      model,
-      usage: data.usage,
-    }
-  },
-}
-
 // ── Cloud Run Ollama Provider ───────────────────────────────────────────────
 
 export const OllamaProvider = {
@@ -218,73 +174,21 @@ export const OllamaProvider = {
   },
 }
 
-// ── Gemini Provider ─────────────────────────────────────────────────────────
-
-export const GeminiProvider = {
-  name: 'gemini',
-  models: ['gemini-2.0-flash', 'gemini-1.5-flash'],
-  supportedTasks: ['code-generation', 'classification', 'extraction', 'chat', 'trainer'],
-
-  isAvailable(config = {}) {
-    return Boolean(config.geminiApiKey)
-  },
-
-  async chat(messages, opts = {}, config = {}) {
-    const model = opts.model || 'gemini-2.0-flash'
-    const response = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${config.geminiApiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature: opts.temperature ?? 0.2,
-          max_tokens: opts.maxTokens || 2048,
-          stream: Boolean(opts.stream),
-        }),
-      },
-    )
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => '')
-      throw new Error(`Gemini HTTP ${response.status}: ${body.slice(0, 200)}`)
-    }
-
-    if (opts.stream) {
-      return { stream: response.body, provider: 'gemini', model }
-    }
-
-    const data = await response.json()
-    return {
-      content: data.choices?.[0]?.message?.content || '',
-      provider: 'gemini',
-      model,
-      usage: data.usage,
-    }
-  },
-}
-
 // ── Task-aware cascade routing ──────────────────────────────────────────────
 
 const DEFAULT_CASCADES = {
-  'code-generation': ['groq', 'gemini', 'ollama'],
-  classification: ['workers-ai', 'groq', 'gemini'],
-  extraction: ['workers-ai', 'groq', 'gemini'],
+  'code-generation': ['workers-ai', 'ollama'],
+  classification: ['workers-ai'],
+  extraction: ['workers-ai'],
   embedding: ['workers-ai'],
-  chat: ['groq', 'workers-ai', 'gemini', 'ollama'],
-  trainer: ['groq', 'gemini', 'ollama'],
-  default: ['groq', 'workers-ai', 'gemini', 'ollama'],
+  chat: ['workers-ai', 'ollama'],
+  trainer: ['workers-ai', 'ollama'],
+  default: ['workers-ai', 'ollama'],
 }
 
 const PROVIDER_MAP = {
   'workers-ai': WorkersAIProvider,
-  groq: GroqProvider,
   ollama: OllamaProvider,
-  gemini: GeminiProvider,
 }
 
 // ── CascadingProvider ───────────────────────────────────────────────────────
@@ -296,8 +200,6 @@ const PROVIDER_MAP = {
  * @param {object} [config.aiBinding] - CF Workers AI binding (inside a Worker)
  * @param {string} [config.accountId] - CF account ID (for HTTP API)
  * @param {string} [config.apiToken] - CF API token (for HTTP API)
- * @param {string} [config.groqApiKey] - Groq API key
- * @param {string} [config.geminiApiKey] - Gemini API key
  * @param {string} [config.ollamaBaseUrl] - Cloud Run Ollama base URL
  * @param {string} [config.ollamaModel] - Ollama model name
  * @param {object} [config.cascades] - Custom cascade overrides per task type
@@ -353,7 +255,7 @@ export function createCascadingProvider(config = {}) {
         content: '',
         provider: null,
         model: null,
-        error: 'No AI provider configured. Set one of: groqApiKey, aiBinding/accountId+apiToken, geminiApiKey, ollamaBaseUrl',
+        error: 'No AI provider configured. Set one of: aiBinding (CF Worker), accountId+apiToken (HTTP), or ollamaBaseUrl',
       }
     }
 

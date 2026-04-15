@@ -4,11 +4,12 @@
  * Single edge gateway for all AI requests. Handles:
  *   - CORS for *.netlify.app origins
  *   - Bearer auth
- *   - Task-aware routing via providers.js cascade
- *   - CF Workers AI for lightweight inference
- *   - Groq for code generation
- *   - Cloud Run Ollama as fallback
+ *   - Task-aware routing — ZERO token cost
+ *   - CF Workers AI (primary — free edge inference)
+ *   - Cloud Run Ollama (fallback — self-hosted Gemma)
  *   - Streaming SSE responses
+ *
+ * NO paid/metered providers. No Groq, no Gemini, no OpenAI, no Anthropic.
  *
  * Endpoints:
  *   POST /api/chat     — General chat completion (streaming or JSON)
@@ -34,8 +35,6 @@ function parseOrigins(env) {
 function getProviderConfig(env) {
   return {
     aiBinding: env.AI,
-    groqApiKey: env.GROQ_API_KEY,
-    geminiApiKey: env.GEMINI_API_KEY,
     ollamaBaseUrl: (env.CLOUD_RUN_ENDPOINT || '').replace(/\/+$/, ''),
     ollamaModel: env.CLOUD_RUN_MODEL || 'gemma3:4b',
   }
@@ -158,7 +157,7 @@ app.post('/api/trainer', async (c) => {
 
   const config = getProviderConfig(c.env)
 
-  // Trainer tasks use trainer cascade: Groq → Gemini → Ollama
+  // Trainer tasks use trainer cascade: Workers AI → Ollama
   const cascade = getCascadeForTask('trainer')
   const errors = []
 
@@ -205,8 +204,6 @@ app.get('/api/health', async (c) => {
   const config = getProviderConfig(c.env)
   const providers = {
     'workers-ai': Boolean(config.aiBinding),
-    groq: Boolean(config.groqApiKey),
-    gemini: Boolean(config.geminiApiKey),
     ollama: Boolean(config.ollamaBaseUrl),
   }
 
@@ -233,13 +230,13 @@ app.get('/', (c) =>
 // ── Provider execution ──────────────────────────────────────────────────────
 
 const CASCADES = {
-  'code-generation': ['groq', 'gemini', 'ollama'],
-  classification: ['workers-ai', 'groq', 'gemini'],
-  extraction: ['workers-ai', 'groq', 'gemini'],
+  'code-generation': ['workers-ai', 'ollama'],
+  classification: ['workers-ai'],
+  extraction: ['workers-ai'],
   embedding: ['workers-ai'],
-  chat: ['groq', 'workers-ai', 'gemini', 'ollama'],
-  trainer: ['groq', 'gemini', 'ollama'],
-  default: ['groq', 'workers-ai', 'gemini', 'ollama'],
+  chat: ['workers-ai', 'ollama'],
+  trainer: ['workers-ai', 'ollama'],
+  default: ['workers-ai', 'ollama'],
 }
 
 function getCascadeForTask(taskType) {
@@ -250,10 +247,6 @@ async function runProvider(name, messages, opts, config) {
   switch (name) {
     case 'workers-ai':
       return runWorkersAI(messages, opts, config)
-    case 'groq':
-      return runGroq(messages, opts, config)
-    case 'gemini':
-      return runGemini(messages, opts, config)
     case 'ollama':
       return runOllama(messages, opts, config)
     default:
@@ -274,79 +267,6 @@ async function runWorkersAI(messages, opts, config) {
 
   if (opts.stream) return { stream: result, provider: 'workers-ai', model }
   return { content: result.response || '', provider: 'workers-ai', model }
-}
-
-async function runGroq(messages, opts, config) {
-  if (!config.groqApiKey) throw new Error('Groq not available')
-  const model = opts.model || 'llama-3.3-70b-versatile'
-
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.groqApiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: opts.temperature ?? 0.2,
-      max_tokens: opts.maxTokens || 2048,
-      stream: Boolean(opts.stream),
-    }),
-  })
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '')
-    throw new Error(`Groq HTTP ${response.status}: ${body.slice(0, 200)}`)
-  }
-
-  if (opts.stream) return { stream: response.body, provider: 'groq', model }
-
-  const data = await response.json()
-  return {
-    content: data.choices?.[0]?.message?.content || '',
-    provider: 'groq',
-    model,
-    usage: data.usage,
-  }
-}
-
-async function runGemini(messages, opts, config) {
-  if (!config.geminiApiKey) throw new Error('Gemini not available')
-  const model = opts.model || 'gemini-2.0-flash'
-
-  const response = await fetch(
-    'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.geminiApiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: opts.temperature ?? 0.2,
-        max_tokens: opts.maxTokens || 2048,
-        stream: Boolean(opts.stream),
-      }),
-    },
-  )
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '')
-    throw new Error(`Gemini HTTP ${response.status}: ${body.slice(0, 200)}`)
-  }
-
-  if (opts.stream) return { stream: response.body, provider: 'gemini', model }
-
-  const data = await response.json()
-  return {
-    content: data.choices?.[0]?.message?.content || '',
-    provider: 'gemini',
-    model,
-    usage: data.usage,
-  }
 }
 
 async function runOllama(messages, opts, config) {

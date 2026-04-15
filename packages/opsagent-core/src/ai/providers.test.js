@@ -2,9 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createCascadingProvider,
   WorkersAIProvider,
-  GroqProvider,
   OllamaProvider,
-  GeminiProvider,
   TASK_TYPES,
 } from './providers.js'
 
@@ -43,21 +41,6 @@ describe('providers', () => {
     })
   })
 
-  describe('GroqProvider', () => {
-    it('is not available without API key', () => {
-      expect(GroqProvider.isAvailable({})).toBe(false)
-    })
-
-    it('is available with API key', () => {
-      expect(GroqProvider.isAvailable({ groqApiKey: 'test' })).toBe(true)
-    })
-
-    it('supports code generation', () => {
-      expect(GroqProvider.supportedTasks).toContain('code-generation')
-      expect(GroqProvider.supportedTasks).toContain('trainer')
-    })
-  })
-
   describe('OllamaProvider', () => {
     it('is not available without base URL', () => {
       expect(OllamaProvider.isAvailable({})).toBe(false)
@@ -70,22 +53,6 @@ describe('providers', () => {
     it('supports code generation and trainer', () => {
       expect(OllamaProvider.supportedTasks).toContain('code-generation')
       expect(OllamaProvider.supportedTasks).toContain('trainer')
-    })
-  })
-
-  describe('GeminiProvider', () => {
-    it('is not available without API key', () => {
-      expect(GeminiProvider.isAvailable({})).toBe(false)
-    })
-
-    it('is available with API key', () => {
-      expect(GeminiProvider.isAvailable({ geminiApiKey: 'test' })).toBe(true)
-    })
-
-    it('supports all main task types', () => {
-      expect(GeminiProvider.supportedTasks).toContain('code-generation')
-      expect(GeminiProvider.supportedTasks).toContain('classification')
-      expect(GeminiProvider.supportedTasks).toContain('trainer')
     })
   })
 
@@ -107,27 +74,29 @@ describe('providers', () => {
 
     it('reports available providers based on config', () => {
       const provider = createCascadingProvider({
-        groqApiKey: 'test',
+        aiBinding: {},
         ollamaBaseUrl: 'http://localhost:11434',
       })
       const available = provider.getAvailableProviders()
-      expect(available).toContain('groq')
+      expect(available).toContain('workers-ai')
       expect(available).toContain('ollama')
-      expect(available).not.toContain('workers-ai')
+      expect(available).toHaveLength(2)
     })
 
     it('returns correct cascade for code-generation', () => {
       const provider = createCascadingProvider({})
       const cascade = provider.getCascade('code-generation')
-      expect(cascade[0]).toBe('groq')
-      expect(cascade).not.toContain('workers-ai')
+      expect(cascade[0]).toBe('workers-ai')
+      expect(cascade).toContain('ollama')
+      expect(cascade).not.toContain('groq')
+      expect(cascade).not.toContain('gemini')
     })
 
     it('returns correct cascade for classification', () => {
       const provider = createCascadingProvider({})
       const cascade = provider.getCascade('classification')
       expect(cascade[0]).toBe('workers-ai')
-      expect(cascade[1]).toBe('groq')
+      expect(cascade).toHaveLength(1)
     })
 
     it('returns correct cascade for embedding', () => {
@@ -136,11 +105,27 @@ describe('providers', () => {
       expect(cascade).toEqual(['workers-ai'])
     })
 
+    it('returns correct cascade for trainer', () => {
+      const provider = createCascadingProvider({})
+      const cascade = provider.getCascade('trainer')
+      expect(cascade).toEqual(['workers-ai', 'ollama'])
+    })
+
+    it('all cascades use only workers-ai and ollama', () => {
+      const provider = createCascadingProvider({})
+      const s = provider.status()
+      for (const [, cascade] of Object.entries(s.cascades)) {
+        for (const p of cascade) {
+          expect(['workers-ai', 'ollama']).toContain(p)
+        }
+      }
+    })
+
     it('allows custom cascade overrides', () => {
       const provider = createCascadingProvider({
-        cascades: { 'code-generation': ['gemini', 'groq'] },
+        cascades: { 'code-generation': ['ollama', 'workers-ai'] },
       })
-      expect(provider.getCascade('code-generation')).toEqual(['gemini', 'groq'])
+      expect(provider.getCascade('code-generation')).toEqual(['ollama', 'workers-ai'])
       // Default cascade unchanged
       expect(provider.getCascade('classification')[0]).toBe('workers-ai')
     })
@@ -153,30 +138,26 @@ describe('providers', () => {
       expect(result.error).toMatch(/No AI provider configured/)
     })
 
-    it('status() returns all providers with availability', () => {
-      const provider = createCascadingProvider({ groqApiKey: 'test' })
+    it('status() returns only workers-ai and ollama providers', () => {
+      const provider = createCascadingProvider({ ollamaBaseUrl: 'http://localhost:11434' })
       const s = provider.status()
-      expect(s.providers.groq.available).toBe(true)
+      expect(Object.keys(s.providers)).toEqual(['workers-ai', 'ollama'])
       expect(s.providers['workers-ai'].available).toBe(false)
-      expect(s.providers.ollama.available).toBe(false)
+      expect(s.providers.ollama.available).toBe(true)
       expect(s.cascades).toBeDefined()
     })
 
-    it('cascades to next provider on failure', async () => {
-      // Mock fetch to fail for groq, succeed for gemini
+    it('cascades to ollama when workers-ai fails', async () => {
+      const mockAiBinding = {
+        run: vi.fn().mockRejectedValue(new Error('Workers AI overloaded')),
+      }
       const originalFetch = globalThis.fetch
-      let callCount = 0
       globalThis.fetch = vi.fn(async (url) => {
-        callCount++
-        if (url.includes('groq.com')) {
-          return { ok: false, status: 500, text: async () => 'Internal error' }
-        }
-        if (url.includes('googleapis.com')) {
+        if (url.includes('/api/chat')) {
           return {
             ok: true,
             json: async () => ({
-              choices: [{ message: { content: 'Hello from Gemini' } }],
-              usage: { total_tokens: 10 },
+              message: { content: 'Hello from Ollama' },
             }),
           }
         }
@@ -185,23 +166,26 @@ describe('providers', () => {
 
       try {
         const provider = createCascadingProvider({
-          groqApiKey: 'test',
-          geminiApiKey: 'test',
+          aiBinding: mockAiBinding,
+          ollamaBaseUrl: 'http://localhost:11434',
         })
         const result = await provider.chat(
           [{ role: 'user', content: 'hello' }],
           { taskType: 'chat' },
         )
-        expect(result.content).toBe('Hello from Gemini')
-        expect(result.provider).toBe('gemini')
+        expect(result.content).toBe('Hello from Ollama')
+        expect(result.provider).toBe('ollama')
         expect(result.errors).toHaveLength(1)
-        expect(result.errors[0].provider).toBe('groq')
+        expect(result.errors[0].provider).toBe('workers-ai')
       } finally {
         globalThis.fetch = originalFetch
       }
     })
 
     it('returns all errors when every provider fails', async () => {
+      const mockAiBinding = {
+        run: vi.fn().mockRejectedValue(new Error('Workers AI down')),
+      }
       const originalFetch = globalThis.fetch
       globalThis.fetch = vi.fn(async () => ({
         ok: false,
@@ -211,8 +195,8 @@ describe('providers', () => {
 
       try {
         const provider = createCascadingProvider({
-          groqApiKey: 'test',
-          geminiApiKey: 'test',
+          aiBinding: mockAiBinding,
+          ollamaBaseUrl: 'http://localhost:11434',
         })
         const result = await provider.chat(
           [{ role: 'user', content: 'hello' }],
@@ -220,14 +204,14 @@ describe('providers', () => {
         )
         expect(result.content).toBe('')
         expect(result.error).toMatch(/All providers failed/)
-        expect(result.errors.length).toBeGreaterThanOrEqual(2)
+        expect(result.errors).toHaveLength(2)
       } finally {
         globalThis.fetch = originalFetch
       }
     })
 
     it('embed throws without workers-ai configured', async () => {
-      const provider = createCascadingProvider({ groqApiKey: 'test' })
+      const provider = createCascadingProvider({ ollamaBaseUrl: 'http://localhost:11434' })
       await expect(provider.embed('hello')).rejects.toThrow(/Workers AI/)
     })
   })
