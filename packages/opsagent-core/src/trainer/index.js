@@ -26,3 +26,11 @@ export { extractJson, parseModifications } from './response-parser.js'
 
 // GitHub committing
 export { applyModifications, commitModifications } from './github-committer.js'
+
+// Fuzzy matching
+export {
+  fuzzyMatch,
+  findClosestMatch,
+  normalizeWhitespace,
+  validateModifications,
+} from './fuzzy-match.js'

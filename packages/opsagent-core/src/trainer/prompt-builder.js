@@ -134,9 +134,10 @@ export function buildTrainerPrompt(instruction, allSections, backendCode, config
     : ''
 
   const defaultRules = [
-    '"search" must be EXACT substring from file (2-3 lines context for uniqueness).',
+    '"search" must be a CHARACTER-FOR-CHARACTER EXACT copy from the source file — copy-paste, do NOT retype or reformat. Include 2-3 lines of surrounding context so the match is unique.',
+    'Preserve ALL original whitespace, indentation (spaces vs tabs), quote style, and line breaks in the "search" field. Even one extra space will cause a match failure.',
     'Modify ONLY what instruction asks. Preserve code structure.',
-    'Return ONLY JSON.',
+    'Return ONLY valid JSON — no explanation, no markdown outside the JSON.',
   ]
   const rules = [...defaultRules, ...(config.extraRules || [])]
   const rulesText = rules.map((r, i) => `${i + 1}. ${r}`).join('\n')

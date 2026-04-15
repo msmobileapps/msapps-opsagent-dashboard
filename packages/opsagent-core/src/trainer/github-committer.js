@@ -18,6 +18,8 @@
  *   })
  */
 
+import { fuzzyMatch, findClosestMatch } from './fuzzy-match.js'
+
 const GITHUB_API = 'https://api.github.com'
 
 /**
@@ -103,26 +105,41 @@ async function updateFile(token, owner, repo, path, branch, content, sha, messag
 
 /**
  * Apply search-and-replace modifications to file content.
+ * Uses cascading match strategies: exact → whitespace-normalized → line-fuzzy.
  *
  * @param {string} content - Original file content
  * @param {Array<{search: string, replace: string}>} mods - Modifications for this file
- * @returns {{ modified: string, applied: number, errors: string[] }}
+ * @returns {{ modified: string, applied: number, errors: string[], matchDetails: Array<{strategy: string|null, matched: boolean}> }}
  */
 export function applyModifications(content, mods) {
   let modified = content
   let applied = 0
   const errors = []
+  const matchDetails = []
 
   for (const mod of mods) {
-    if (modified.includes(mod.search)) {
-      modified = modified.replace(mod.search, mod.replace)
+    const result = fuzzyMatch(modified, mod.search)
+
+    if (result.matched) {
+      // Replace the matched region in the original content
+      modified = modified.slice(0, result.index)
+        + mod.replace
+        + modified.slice(result.index + result.matchLength)
       applied++
+      matchDetails.push({ strategy: result.strategy, matched: true })
     } else {
-      errors.push(`Search string not found: "${mod.search.slice(0, 60)}..."`)
+      // Find closest match for helpful error message
+      const closest = findClosestMatch(modified, mod.search)
+      let errMsg = `Search string not found: "${mod.search.slice(0, 80)}..."`
+      if (closest) {
+        errMsg += ` (closest match at line ${closest.lineNumber}, ${Math.round(closest.score * 100)}% similar)`
+      }
+      errors.push(errMsg)
+      matchDetails.push({ strategy: null, matched: false })
     }
   }
 
-  return { modified, applied, errors }
+  return { modified, applied, errors, matchDetails }
 }
 
 /**

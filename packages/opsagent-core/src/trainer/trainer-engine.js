@@ -27,6 +27,7 @@ import { buildTrainerPrompt, chooseNumCtx, estimateTokens } from './prompt-build
 import { streamChatToString } from './streaming-client.js'
 import { parseModifications } from './response-parser.js'
 import { commitModifications } from './github-committer.js'
+import { validateModifications, fuzzyMatch, findClosestMatch } from './fuzzy-match.js'
 
 /**
  * @typedef {object} TrainerConfig
@@ -196,9 +197,29 @@ export function createTrainerEngine(config) {
     }
   }
 
+  /**
+   * Validate AI-generated modifications against file content without committing.
+   * Returns match status per modification with helpful error info for failed matches.
+   *
+   * @param {Array<{file: string, search: string, replace: string}>} modifications
+   * @param {Record<string, string>} fileContents - Map of file path → file content
+   * @returns {Array<{file: string, search: string, replace: string, matched: boolean, strategy: string|null, closestMatch: object|null}>}
+   */
+  function validateBeforeCommit(modifications, fileContents) {
+    return modifications.map(mod => {
+      const content = fileContents[mod.file]
+      if (!content) {
+        return { ...mod, matched: false, strategy: null, closestMatch: null }
+      }
+      const validations = validateModifications(content, [{ search: mod.search, replace: mod.replace }])
+      return { file: mod.file, ...validations[0] }
+    })
+  }
+
   return {
     buildPromptInfo,
     generateModifications,
     processInstruction,
+    validateBeforeCommit,
   }
 }
