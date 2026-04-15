@@ -14,12 +14,10 @@ enabled = true
 # Environment variables (non-secret)
 [vars]
 ALLOWED_ORIGINS = "https://ilcf-medinfo-demo.netlify.app,https://ilcf-medinfo.netlify.app,https://opsagent-dashboard.netlify.app,http://localhost:5173"
-CLOUD_RUN_ENDPOINT = "https://opsagent-ai-runtime-523955774086.us-central1.run.app"
+CLOUD_RUN_ENDPOINT = "https://opsagent-ai-runtime-zadkrinzra-uc.a.run.app"
 CLOUD_RUN_MODEL = "gemma3:4b"
 
 # Secrets (set via `npx wrangler secret put <NAME>`):
-#   GROQ_API_KEY
-#   GEMINI_API_KEY
 #   API_TOKEN (bearer auth for this gateway)
 
 # Staging environment
