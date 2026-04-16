@@ -55,3 +55,14 @@ export { createCascadingProvider, TASK_TYPES } from './ai/providers.js'
 
 // Trainer engine
 export { createTrainerEngine } from './trainer/trainer-engine.js'
+
+// Image generation
+export {
+  ImageGenerationAdapter,
+  IMAGE_STYLES,
+  IMAGE_RESOLUTIONS,
+  validateInput as validateImageInput,
+  applyDefaults as applyImageDefaults,
+  enhancePrompt,
+  buildGenerationPayload,
+} from './image-generation/index.js'

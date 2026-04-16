@@ -26,6 +26,7 @@ export const TASK_TYPES = {
   EMBEDDING: 'embedding',
   CHAT: 'chat',
   TRAINER: 'trainer',
+  IMAGE_GENERATION: 'image-generation',
 }
 
 // ── Provider interface ──────────────────────────────────────────────────────

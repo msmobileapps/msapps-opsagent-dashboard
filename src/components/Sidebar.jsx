@@ -1,5 +1,5 @@
 import React from 'react'
-import { Target, LayoutDashboard, Zap, Settings, Activity } from 'lucide-react'
+import { Target, LayoutDashboard, Zap, Settings, Activity, ImageIcon } from 'lucide-react'
 
 function NavItem({ icon: Icon, label, meta, active, onClick, badge }) {
   return (
@@ -63,6 +63,13 @@ export default function Sidebar({ store }) {
             meta="Active tasks, pipeline status, and agent health"
             active={view === 'dashboard'}
             onClick={() => { setView('dashboard'); setSelectedTask(null) }}
+          />
+          <NavItem
+            icon={ImageIcon}
+            label="Image Generation"
+            meta="Generate visuals with FLUX/SDXL"
+            active={view === 'image-generation'}
+            onClick={() => { setView('image-generation'); setSelectedTask(null) }}
           />
         </div>
 

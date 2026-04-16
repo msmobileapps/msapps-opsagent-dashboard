@@ -35,6 +35,10 @@
     "./trainer/response-parser": "./src/trainer/response-parser.js",
     "./trainer/github-committer": "./src/trainer/github-committer.js",
     "./trainer/engine": "./src/trainer/trainer-engine.js",
-    "./trainer/config-ilcf": "./src/trainer/trainer-config.ilcf.js"
+    "./trainer/config-ilcf": "./src/trainer/trainer-config.ilcf.js",
+    "./image-generation": "./src/image-generation/index.js",
+    "./image-generation/contracts": "./src/image-generation/contracts.js",
+    "./image-generation/prompt-builder": "./src/image-generation/prompt-builder.js",
+    "./image-generation/adapter": "./src/image-generation/adapter.js"
   }
 }

@@ -5,6 +5,7 @@ import Notifications from './components/Notifications'
 
 const Dashboard = lazy(() => import('./components/Dashboard'))
 const TaskDetailView = lazy(() => import('./components/TaskDetailView'))
+const ImageGeneration = lazy(() => import('./components/ImageGeneration'))
 
 function ViewFallback() {
   return (
@@ -21,6 +22,8 @@ export default function App() {
     switch (store.view) {
       case 'task-detail':
         return store.selectedTask ? <TaskDetailView store={store} /> : <Dashboard store={store} />
+      case 'image-generation':
+        return <ImageGeneration />
       default:
         return <Dashboard store={store} />
     }
