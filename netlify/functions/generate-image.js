@@ -5,8 +5,8 @@
  * Falls back to mock mode when IMAGE_SERVICE_URL is not set.
  */
 
-import { validateInput, applyDefaults, buildGenerationPayload } from '../../packages/opsagent-core/src/image-generation/contracts.js'
-import { enhancePrompt, mergeNegativePrompts } from '../../packages/opsagent-core/src/image-generation/prompt-builder.js'
+import { validateInput, applyDefaults } from '../../packages/opsagent-core/src/image-generation/contracts.js'
+import { buildGenerationPayload } from '../../packages/opsagent-core/src/image-generation/prompt-builder.js'
 
 export default async function handler(req, context) {
   // CORS preflight
@@ -33,18 +33,9 @@ export default async function handler(req, context) {
       })
     }
 
-    // Apply defaults and build payload
+    // Apply defaults and build payload via shared builder
     const resolved = applyDefaults(body)
-    const payload = {
-      prompt: enhancePrompt(resolved.prompt, resolved.style),
-      negativePrompt: mergeNegativePrompts(resolved.negativePrompt, resolved.style),
-      width: resolved.width,
-      height: resolved.height,
-      numImages: resolved.numImages,
-      guidanceScale: resolved.guidanceScale,
-      inferenceSteps: resolved.inferenceSteps,
-      seed: resolved.seed,
-    }
+    const payload = buildGenerationPayload(resolved)
 
     const serviceUrl = process.env.IMAGE_SERVICE_URL
     if (!serviceUrl) {

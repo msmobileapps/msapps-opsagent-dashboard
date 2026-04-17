@@ -1,0 +1,11 @@
+{
+  "name": "opsagent-image-generation-service",
+  "version": "0.1.0",
+  "description": "Stateless image generation service — provider-agnostic (FLUX/SDXL via CF Workers AI or ComfyUI).",
+  "type": "module",
+  "private": true,
+  "main": "server.js",
+  "engines": { "node": ">=20" },
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "express": "^4.21.2" }
+}
