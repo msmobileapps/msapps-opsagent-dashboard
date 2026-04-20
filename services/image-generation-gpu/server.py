@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from flux.sampling import denoise, get_noise, get_schedule, prepare, unpack
 from flux.util import configs, load_ae, load_clip, load_flow_model, load_t5
 
-MODEL_NAME = os.environ.get("FLUX_MODEL", "flux-schnell")
+MODEL_NAME = os.environ.get("FLUX_MODEL_NAME", "flux-schnell")
 OFFLOAD = os.environ.get("FLUX_OFFLOAD", "true").lower() == "true"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 PORT = int(os.environ.get("PORT", "8000"))
