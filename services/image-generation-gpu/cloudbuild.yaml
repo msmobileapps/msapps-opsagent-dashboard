@@ -1,0 +1,40 @@
+# Cloud Build config for the FLUX.1-schnell image.
+# The Dockerfile bakes the FLUX safetensors (~24GB) + AE into the image at build time,
+# so the builder needs a larger disk than the old SDXL/ComfyUI build.
+
+substitutions:
+  _TAG: flux-schnell              # semantic tag; overridable at submit time
+  _REPO: opsagent
+  _SERVICE: image-generation-gpu
+
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    id: build
+    args:
+      - build
+      - --tag=us-central1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${_TAG}
+      - --tag=us-central1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
+      - .
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push-tag
+    args:
+      - push
+      - us-central1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${_TAG}
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push-latest
+    args:
+      - push
+      - us-central1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
+
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${_TAG}
+  - us-central1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
+
+options:
+  machineType: E2_HIGHCPU_32
+  diskSizeGb: 300           # was 200; bumped for baked FLUX weights + build-time cache
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 7200s              # ~2 h cap; first build pulls 24GB weights + torch wheels
