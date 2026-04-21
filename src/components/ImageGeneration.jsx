@@ -1,5 +1,14 @@
 import React, { useState, useRef, useCallback } from 'react'
-import { Image, Wand2, Settings2, Download, ExternalLink, Copy, Loader2, ChevronDown, ChevronUp, Clock, Sparkles } from 'lucide-react'
+import { Image, Wand2, Settings2, Download, ExternalLink, Copy, Loader2, ChevronDown, ChevronUp, Clock, Sparkles, ImageIcon } from 'lucide-react'
+
+// ── Sample gallery (stopgap while SDXL GPU pipeline is coming online) ─────
+// Source: wetransfer 4-17 drop (38 PNGs → resized to 1024px JPEGs in /public/samples/)
+const SAMPLE_GALLERY = [
+  ...['11','12','13','14','15','16'].map(n => `/samples/B/${n}.jpg`),
+  ...['21','22','23','24','25','26','27'].map(n => `/samples/G/${n}.jpg`),
+  ...['31','32','33','34','35','36'].map(n => `/samples/M/${n}.jpg`),
+  ...['41','42','43','44','45','46','47','48','49','410','411','412','413','414','415','416','417','418','419'].map(n => `/samples/W/${n}.jpg`),
+]
 
 // ── Inline style/resolution data (avoids import issues with Vite) ──────────
 const IMAGE_STYLES = {
@@ -25,6 +34,37 @@ const IMAGE_RESOLUTIONS = {
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
+
+function SampleGallery({ onPick }) {
+  return (
+    <div className="mt-6">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+          Sample Gallery · {SAMPLE_GALLERY.length} images
+        </p>
+        <p className="text-[10px] text-slate-500">Preview while GPU pipeline warms up</p>
+      </div>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+        {SAMPLE_GALLERY.map((src) => (
+          <button
+            key={src}
+            onClick={() => onPick?.(src)}
+            className="group relative overflow-hidden rounded-lg border border-white/6 bg-white/[0.02] transition-all hover:border-white/20"
+            style={{ aspectRatio: '3 / 4' }}
+          >
+            <img
+              src={src}
+              alt=""
+              loading="lazy"
+              className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
+            <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20" />
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function StylePicker({ value, onChange }) {
   return (
@@ -330,12 +370,15 @@ export default function ImageGeneration() {
             )}
 
             {!result && !loading && !error && (
-              <div className="mt-6 flex flex-col items-center justify-center py-16 text-center">
-                <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white/[0.03] border border-white/6">
-                  <Image className="h-10 w-10 text-slate-600" strokeWidth={1.2} />
+              <div className="mt-6">
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white/[0.03] border border-white/6">
+                    <Image className="h-10 w-10 text-slate-600" strokeWidth={1.2} />
+                  </div>
+                  <p className="mt-4 text-sm font-semibold text-slate-400">No images yet</p>
+                  <p className="mt-1 text-xs text-slate-500">Describe what you want and hit Generate</p>
                 </div>
-                <p className="mt-4 text-sm font-semibold text-slate-400">No images yet</p>
-                <p className="mt-1 text-xs text-slate-500">Describe what you want and hit Generate</p>
+                <SampleGallery />
               </div>
             )}
 

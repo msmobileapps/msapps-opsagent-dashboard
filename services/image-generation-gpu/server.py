@@ -44,7 +44,7 @@ def _load_models() -> None:
         return
     if MODEL_NAME not in configs:
         raise RuntimeError(
-            f"Unknown FLUX_MODEL={MODEL_NAME!r}; valid: {', '.join(configs.keys())}"
+            f"Unknown FLUX_MODEL_NAME={MODEL_NAME!r}; valid: {', '.join(configs.keys())}"
         )
     t0 = time.time()
     torch_device = torch.device(DEVICE)

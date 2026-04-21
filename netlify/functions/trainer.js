@@ -2,12 +2,17 @@
  * trainer.js — Netlify function for the OpsAgent Trainer.
  *
  * GET  /api/trainer → Fetch source files from GitHub, parse into sections, return config
- * POST /api/trainer → Commit AI-generated modifications to GitHub (or dry-run validate)
+ * POST /api/trainer → Route by action:
+ *   - action: 'ai'     → Proxy AI request through CF Worker AI Gateway (zero API keys)
+ *   - action: 'commit'  → Commit AI-generated modifications to GitHub
+ *   - (default/legacy)  → Commit handler (backwards compat)
  *
  * Environment variables:
- *   GITHUB_TOKEN      — Classic PAT with repo access
- *   GEMMA_LOCAL_URL   — Ollama-compatible endpoint (Cloud Run)
- *   GEMMA_MODEL       — Model name (default: gemma3:4b)
+ *   GITHUB_TOKEN         — Classic PAT with repo access
+ *   CF_AI_GATEWAY_URL    — CF Worker AI Gateway endpoint
+ *   CF_AI_GATEWAY_TOKEN  — Bearer token for the gateway
+ *   GEMMA_LOCAL_URL      — Legacy: direct Ollama endpoint (fallback)
+ *   GEMMA_MODEL          — Model name (default: gemma3:4b)
  */
 import { handleCors, jsonResponse } from './_lib/store.js'
 import { commitModifications, applyModifications } from 'opsagent-core/trainer'
@@ -119,6 +124,109 @@ function parseSections(content) {
 }
 
 /**
+ * AI proxy handler — forward AI requests through CF Worker AI Gateway.
+ * The browser can't call the gateway directly (token would be exposed).
+ * This function holds the token server-side and proxies the request.
+ */
+async function handleAiProxy(body) {
+  const gatewayUrl = (process.env.CF_AI_GATEWAY_URL || '').replace(/\/+$/, '')
+  const gatewayToken = process.env.CF_AI_GATEWAY_TOKEN || ''
+
+  if (!gatewayUrl || !gatewayToken) {
+    return jsonResponse({ error: 'AI gateway not configured (CF_AI_GATEWAY_URL / CF_AI_GATEWAY_TOKEN)' }, 500)
+  }
+
+  const { instruction, sections, chatJs } = body
+
+  if (!instruction) {
+    return jsonResponse({ error: 'instruction is required for AI action' }, 400)
+  }
+
+  // Build the same prompt the trainer page builds client-side
+  const sectionTexts = Object.entries(sections || {})
+    .map(([name, txt]) => `<section name="${name}">\n${txt}\n</section>`)
+    .join('\n\n')
+
+  const chatJsPart = chatJs
+    ? `\n\n<file path="clients/ilcf/netlify/functions/chat.js">\n${chatJs}\n</file>`
+    : ''
+
+  const userContent = `You are modifying the ILCF MedInfo chatbot — a Hebrew medical information assistant for lung cancer patients in Israel.
+
+An employee has given this instruction:
+<instruction>
+${instruction}
+</instruction>
+
+Here are the modifiable sections of the source files:
+
+<file path="clients/ilcf/index.html" note="showing modifiable sections only">
+${sectionTexts}
+</file>${chatJsPart}
+
+YOUR TASK: Apply the employee's instruction by modifying the code.
+
+Return a JSON object with this structure:
+{
+  "summary_he": "Hebrew summary",
+  "summary_en": "English summary",
+  "modifications": [
+    { "file": "clients/ilcf/index.html", "search": "EXACT text to find", "replace": "replacement text" }
+  ]
+}
+
+RULES:
+1. Each modification is a search/replace pair. The "search" must be an EXACT substring from the current file.
+2. Include enough surrounding context in "search" to make it unique (at least 2-3 lines).
+3. Modify ONLY what the instruction asks for.
+4. All user-facing text MUST be in Hebrew. Drug names can stay in English.
+5. Medical information must be accurate.
+6. Preserve code structure, variable names, and formatting.
+7. Return ONLY the JSON. No explanation outside the JSON.`
+
+  const systemPrompt = 'You are a code modification assistant. You output ONLY valid JSON — no markdown, no explanation. CRITICAL RULE: The "search" field must be COPIED EXACTLY from the source code shown to you. Do NOT paraphrase, summarize, or invent text. If you cannot find the exact text to modify, return an empty modifications array.'
+
+  try {
+    const response = await fetch(`${gatewayUrl}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${gatewayToken}`,
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent },
+        ],
+        taskType: 'code-generation',
+        stream: false,
+        temperature: 0.1,
+        max_tokens: 4096,
+      }),
+    })
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '')
+      return jsonResponse({ error: `AI backend error: ${response.status} ${errText.slice(0, 200)}` }, 502)
+    }
+
+    const data = await response.json()
+    const rawContent = data.choices?.[0]?.message?.content || ''
+
+    // Extract JSON from the AI response
+    const fenced = rawContent.match(/```json\s*([\s\S]*?)```/i)
+    const jsonStr = fenced
+      ? fenced[1].trim()
+      : rawContent.slice(rawContent.indexOf('{'), rawContent.lastIndexOf('}') + 1)
+
+    const parsed = JSON.parse(jsonStr)
+    return jsonResponse(parsed)
+  } catch (err) {
+    return jsonResponse({ error: `AI proxy error: ${err.message}` }, 500)
+  }
+}
+
+/**
  * GET handler — fetch files from GitHub and return parsed sections.
  */
 async function handleGet(token) {
@@ -136,12 +244,18 @@ async function handleGet(token) {
 
   const sections = parseSections(mainContent)
 
-  const aiEndpoint = process.env.GEMMA_LOCAL_URL || ''
-  const aiModel = process.env.GEMMA_MODEL || 'gemma3:4b'
+  // Prefer CF Gateway (zero-API-key architecture). Fall back to legacy GEMMA_LOCAL_URL.
+  const aiEndpoint = process.env.CF_AI_GATEWAY_URL || process.env.GEMMA_LOCAL_URL || ''
+  // Default to gemma3:12b — pre-loaded in the Cloud Run `gemma3-12b-warm` image.
+  // Defaulting to gemma3:4b would force Ollama to pull-on-first-request → slow cold start.
+  const aiModel = process.env.GEMMA_MODEL || 'gemma3:12b'
+  // Tell the client whether server-side AI proxy is available (so it doesn't need the token)
+  const hasServerProxy = Boolean(process.env.CF_AI_GATEWAY_URL && process.env.CF_AI_GATEWAY_TOKEN)
 
   return jsonResponse({
     aiEndpoint,
     aiModel,
+    hasServerProxy,
     sections,
     chatJs: backendContent || null,
     mainFile,
@@ -238,6 +352,13 @@ export default async (request) => {
 
     if (request.method === 'POST') {
       const body = await request.json()
+
+      // Route by action field
+      if (body.action === 'ai') {
+        return await handleAiProxy(body)
+      }
+
+      // Default: commit handler (action: 'commit' or legacy format with modifications)
       return await handlePost(token, body)
     }
 

@@ -1,13 +1,23 @@
 /**
  * AI Chat API — OpsAgent conversational AI for lead analysis.
  *
- * Uses open-source models via HuggingFace Inference API (free).
- * Falls back to Gemini if HF is unavailable.
+ * Zero-Key cascade (see Notion: 🔒 Zero-Key AI Independence):
+ *   1. Local Gemma (via GEMMA_LOCAL_URL — Cloud Run sidecar or self-hosted Ollama)  [DEFAULT]
+ *   2. HuggingFace Qwen-72B (free, requires HF_TOKEN)
+ *   3. HuggingFace Mistral-7B (free, requires HF_TOKEN)
+ *   4. Gemini 2.0 Flash (free tier, OPT-IN — requires OPSAGENT_AI_CLOUD=1 + GEMINI_API_KEY)
+ *
+ * Strict mode: OPSAGENT_AI_LOCAL_ONLY=1 disables every cloud provider. Only local
+ * Gemma is attempted; if it fails, the request fails closed (no fallback).
  *
  * Frontend sends: { messages: [{role, content}], leadContext: string }
  * Returns:        { response: string, provider: string }
  */
 import { handleCors, jsonResponse } from './_lib/store.js'
+
+// ── Zero-Key env gates ──────────────────────────────────────────────────────
+const LOCAL_ONLY = process.env.OPSAGENT_AI_LOCAL_ONLY === '1'
+const CLOUD_OPT_IN = process.env.OPSAGENT_AI_CLOUD === '1'
 
 const SYSTEM_PROMPT = `אתה OpsAgent — עוזר AI חכם לניהול לידים ומכירות עבור MSApps.
 אתה מדבר בעברית, מקצועי, ישיר, ועוזר לסגור עסקאות.
@@ -28,8 +38,48 @@ const SYSTEM_PROMPT = `אתה OpsAgent — עוזר AI חכם לניהול לי�
 - כשמבקשים טיוטת מייל, כתוב מייל שלם ומקצועי
 - כשמבקשים ניתוח סיכונים, היה כנה ומציאותי`
 
+// Provider 0: Local Gemma (PRIMARY — Zero-Key default path)
+// Env: GEMMA_LOCAL_URL (e.g. https://opsagent-ai-runtime-…us-central1.run.app)
+//      GEMMA_MODEL    (default: gemma3:12b)
+async function callLocalGemma(messages, leadContext) {
+  const baseUrl = (process.env.GEMMA_LOCAL_URL || '').replace(/\/+$/, '')
+  if (!baseUrl) return null
+  const model = process.env.GEMMA_MODEL || 'gemma3:12b'
+
+  const ollamaMessages = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    ...(leadContext ? [{ role: 'system', content: `מידע על הליד:\n${leadContext}` }] : []),
+    ...messages,
+  ]
+
+  try {
+    const res = await fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: ollamaMessages,
+        stream: false,
+        options: { temperature: 0.7, num_ctx: 4096 },
+      }),
+    })
+
+    if (!res.ok) {
+      console.error(`Gemma/local error: ${res.status}`)
+      return null
+    }
+
+    const data = await res.json()
+    return data.message?.content || null
+  } catch (err) {
+    console.error('Gemma/local failed:', err.message)
+    return null
+  }
+}
+
 // Provider 1: HuggingFace (Qwen 72B — top open-source)
 async function callHuggingFace(messages, leadContext) {
+  if (LOCAL_ONLY) return null
   const token = process.env.HF_TOKEN
   if (!token) return null
 
@@ -72,6 +122,7 @@ async function callHuggingFace(messages, leadContext) {
 
 // Provider 2: HuggingFace (Mistral 7B — lighter fallback)
 async function callHuggingFaceSmall(messages, leadContext) {
+  if (LOCAL_ONLY) return null
   const token = process.env.HF_TOKEN
   if (!token) return null
 
@@ -112,8 +163,14 @@ async function callHuggingFaceSmall(messages, leadContext) {
   }
 }
 
-// Provider 3: Gemini (fallback — uses existing env var)
+// Provider 3: Gemini 2.0 Flash (free tier) — OPT-IN ONLY
+// Per Zero-Key invariant, only runs when BOTH:
+//   - OPSAGENT_AI_CLOUD=1 (explicit opt-in to cloud fallback)
+//   - GEMINI_API_KEY is set (free-tier key)
+// LOCAL_ONLY mode disables this provider entirely.
 async function callGemini(messages, leadContext) {
+  if (LOCAL_ONLY) return null
+  if (!CLOUD_OPT_IN) return null
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return null
 
@@ -173,8 +230,10 @@ export default async (request) => {
     return jsonResponse({ error: 'Messages array is required' }, 400)
   }
 
-  // Try providers in priority order
+  // Try providers in priority order — local Gemma always first (Zero-Key default).
+  // HuggingFace + Gemini gated by env (LOCAL_ONLY disables both; Gemini also needs CLOUD_OPT_IN).
   const providers = [
+    { name: 'Gemma/local', fn: callLocalGemma },
     { name: 'HuggingFace/Qwen-72B', fn: callHuggingFace },
     { name: 'HuggingFace/Mistral-7B', fn: callHuggingFaceSmall },
     { name: 'Gemini', fn: callGemini },
@@ -187,6 +246,17 @@ export default async (request) => {
       console.log(`Success with: ${provider.name}`)
       return jsonResponse({ response: result, provider: provider.name })
     }
+  }
+
+  // Strict mode: no fallback, fail closed without leaking paid-key suggestions.
+  if (LOCAL_ONLY) {
+    return jsonResponse(
+      {
+        error: 'Local Gemma unavailable in OPSAGENT_AI_LOCAL_ONLY mode',
+        response: '⚠️ שרת Gemma המקומי אינו זמין כרגע. נסה שוב בעוד כמה שניות.',
+      },
+      503
+    )
   }
 
   return jsonResponse(

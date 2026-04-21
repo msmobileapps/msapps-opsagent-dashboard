@@ -141,7 +141,7 @@ export const OllamaProvider = {
   },
 
   async chat(messages, opts = {}, config = {}) {
-    const model = opts.model || config.ollamaModel || 'gemma3:4b'
+    const model = opts.model || config.ollamaModel || 'gemma3:12b'
     const baseUrl = config.ollamaBaseUrl.replace(/\/+$/, '')
     const response = await fetch(`${baseUrl}/api/chat`, {
       method: 'POST',
