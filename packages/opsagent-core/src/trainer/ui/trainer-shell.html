@@ -187,7 +187,7 @@
     window.TRAINER_CONFIG = {
       appName: 'My App',
       branding: { title: 'My Trainer', subtitle: 'Edit code with AI' },
-      ai: { endpoint: 'https://my-ollama.example.com', model: 'gemma3:4b' },
+      ai: { endpoint: 'https://my-ollama.example.com', model: 'gemma3:12b' },
       trainerApiUrl: '/api/trainer',
       sectionKeywords: { main: ['keyword1', 'keyword2'] },
     }
@@ -277,7 +277,7 @@
       // AI configuration
       ai: {
         endpoint: '',
-        model: 'gemma3:4b',
+        model: 'gemma3:12b',
         temperature: 0.1,
         systemMessage: 'You are a precise code modification assistant. Return only valid JSON. Every search string must be an exact match from the source file.',
       },

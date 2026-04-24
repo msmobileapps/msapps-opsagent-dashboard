@@ -78,7 +78,7 @@ window.TRAINER_CONFIG = {
   ai: {
     // endpoint comes from server config (GET /api/trainer returns aiEndpoint)
     endpoint: '',
-    model: 'gemma3:4b',
+    model: 'gemma3:12b',
     temperature: 0.1,
     systemMessage: 'You are a precise code modification assistant. Return only valid JSON. Every search string must be an exact match from the source file.',
   },
