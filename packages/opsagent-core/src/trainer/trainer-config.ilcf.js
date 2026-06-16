@@ -10,7 +10,7 @@
  *
  *   const config = createIlcfConfig({
  *     aiEndpoint: process.env.GEMMA_LOCAL_URL,
- *     aiModel: process.env.GEMMA_MODEL || 'gemma3:4b',
+ *     aiModel: process.env.GEMMA_MODEL || 'gemma3:12b',
  *     githubToken: process.env.GITHUB_TOKEN,
  *   })
  *   const engine = createTrainerEngine(config)
@@ -77,7 +77,7 @@ export const ILCF_EXTRA_RULES = [
  *
  * @param {object} env - Environment-specific values
  * @param {string} env.aiEndpoint  - Ollama endpoint URL
- * @param {string} [env.aiModel]   - Model name (default: 'gemma3:4b')
+ * @param {string} [env.aiModel]   - Model name (default: 'gemma3:12b')
  * @param {string} [env.githubToken] - GitHub PAT (optional, for commits)
  * @param {string} [env.githubBranch] - Branch (default: 'trainer')
  * @returns {import('./trainer-engine.js').TrainerConfig}
@@ -105,7 +105,7 @@ export function createIlcfConfig(env) {
 
     ai: {
       endpoint: env.aiEndpoint,
-      model: env.aiModel || 'gemma3:4b',
+      model: env.aiModel || 'gemma3:12b',
       temperature: 0.1,
       timeout: 300_000,
     },
